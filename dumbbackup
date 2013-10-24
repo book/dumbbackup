@@ -1,24 +1,68 @@
 #!/bin/sh
 
 # TODO
-# - more dumbbackup options (using getopt(1))
-# - more exclude options, actually
 # - cleanup old backups (keep X dailies, and Y monthlies)
 #   (for a monthly, keep the oldest in that month)
+# - test what happens with weird directories (e.g. with space in the name)
+USAGE="Usage: $0 [ --store=dir ] [ --check ] [ --nice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
 
-# directories
-BACKUP="/backup"
-DEST=$BACKUP/`date +%Y-%m-%d`
-PREV=`ls -d $BACKUP/????-??-?? | sort | grep -v "$DEST" | tail -1`
+# defaults
+STORE="/backup"
+NICE=0
 
-# options
-OPTS="-aH --partial --log-file=$BACKUP/`date +%Y-%m-%d`.log"
-if [ -d "$PREV" ] ; then
-    OPTS="$OPTS --link-dest=$PREV/"
+# command-line options
+OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice: -n "$0" -- "$@"`
+if [ $? != 0 ] ; then
+    echo $USAGE >&2
+    exit 1
 fi
 
-# stuff to backup is a list of directories given on the command-line
-for SRC in $* ; do
+eval set -- "$OPTS"
+while true ; do
+    case "$1" in
+        -X|--exclude)
+            FILTERS="$FILTERS --exclude=$2"
+            shift 2 ;;
+        --store)
+            STORE="$2"
+            shift 2 ;;
+        --rsync-opts)
+            RSYNC_OPTS="$RSYNC_OPTS $2"
+            shift 2 ;;
+        --log)
+            DO_LOG=1
+            shift ;;
+        --check)
+            DO_CHECK=1
+            shift ;;
+        --nice)
+            NICE=$2
+            shift 2 ;;
+        --) shift ; break ;;
+        *)
+            echo "Internal error!" >&2
+            echo $USAGE            >&2
+            exit 1 ;;
+    esac
+done
+FILTERS="$FILTERS --exclude=$STORE"
+
+# directories
+TODAY=`date +%Y-%m-%d`
+DEST=$STORE/$TODAY
+PREV=`ls -d $STORE/????-??-?? | sort | grep -v "$DEST" | tail -1`
+
+# rsync options
+RSYNC_OPTS="$RSYNC_OPTS -aH --partial"
+if [ "$DO_LOG" ] ; then
+    RSYNC_OPTS="$RSYNC_OPTS --log-file=$STORE/$TODAY.log"
+fi
+if [ -d "$PREV" ] ; then
+    RSYNC_OPTS="$RSYNC_OPTS --link-dest=$PREV/"
+fi
+
+# remaining arguments are a list of directories to backup
+for SRC ; do
     SRC="$SRC/**"
     while [ "$SRC" != '/' ] ; do
         FILTERS="$FILTERS --include=$SRC"
@@ -28,4 +72,9 @@ done
 FILTERS="$FILTERS --exclude=*"
 
 # perform the actual backup
-rsync $OPTS $FILTERS / $DEST
+CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
+if [ "$DO_CHECK" ] ; then
+    echo $CMD
+else
+    nice -n $NICE $CMD
+fi
