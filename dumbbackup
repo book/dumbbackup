@@ -4,14 +4,16 @@
 # - cleanup old backups (keep X dailies, and Y monthlies)
 #   (for a monthly, keep the oldest in that month)
 # - test what happens with weird directories (e.g. with space in the name)
-USAGE="Usage: $0 [ --store=dir ] [ --check ] [ --nice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
+USAGE="Usage: $0 [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
 
 # defaults
 STORE="/backup"
 NICE=0
+KEEP_DAYS=10
+KEEP_MONTHS=6
 
 # command-line options
-OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice: -n "$0" -- "$@"`
+OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice:,cleanup,keep-days:,keep-months: -n "$0" -- "$@"`
 if [ $? != 0 ] ; then
     echo $USAGE >&2
     exit 1
@@ -35,8 +37,17 @@ while true ; do
         --check)
             DO_CHECK=1
             shift ;;
+        --cleanup)
+            DO_CLEANUP=1
+            shift ;;
         --nice)
             NICE=$2
+            shift 2 ;;
+        --keep-days)
+            KEEP_DAYS=$2
+            shift 2 ;;
+        --keep-months)
+            KEEP_MONTHS=$2
             shift 2 ;;
         --) shift ; break ;;
         *)
@@ -76,5 +87,30 @@ CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
 if [ "$DO_CHECK" ] ; then
     echo $CMD
 else
-    nice -n $NICE $CMD
+    ionice -c 3 nice -n $NICE $CMD
+fi
+
+# cleanup
+if [ "$DO_CLEANUP" ] ; then
+    # make the list of backups to delete
+    DELETE=`perl -l - << \PERL $KEEP_MONTHS $KEEP_DAYS $STORE
+    my ($months, $days, $dir) = @ARGV;
+    my ( %m, %k );
+    @dirs = sort glob "$dir/????-??-??";
+    /\b(\d{4}-\d{2})-\d{2}$/ and push @{ $m{$1} }, $_
+      for @dirs;
+    $k{$_}++ for grep $_, ( reverse @dirs )[ 0 .. $days - 1 ];
+    $k{ $m{$_}[0] }++ for grep $_, ( reverse sort keys %m )[ 0 .. $months - 1 ];
+    print for grep !$k{$_}, @dirs;
+PERL
+`
+
+    # do the delete
+    for bye in $DELETE ; do
+        if [ "$DO_CHECK" ] ; then
+            echo rm -rf $bye
+        else
+            ionice -c 3 rm -rf $bye
+        fi
+    done
 fi
