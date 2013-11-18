@@ -112,9 +112,9 @@ PERL
     # do the delete
     for bye in $DELETE ; do
         if [ "$DO_CHECK" ] ; then
-            echo rm -rf $bye
+            echo rm -rf "$bye" "$bye.log"
         else
-            ionice -c $IONICE rm -rf $bye
+            ionice -c $IONICE rm -rf "$bye" "$bye.log"
         fi
     done
 fi
