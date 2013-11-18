@@ -8,12 +8,13 @@ USAGE="Usage: $0 [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --rsyn
 
 # defaults
 STORE="/backup"
+IONICE=0
 NICE=0
 KEEP_DAYS=10
 KEEP_MONTHS=6
 
 # command-line options
-OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice:,cleanup,keep-days:,keep-months: -n "$0" -- "$@"`
+OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months: -n "$0" -- "$@"`
 if [ $? != 0 ] ; then
     echo $USAGE >&2
     exit 1
@@ -41,6 +42,9 @@ while true ; do
             DO_CLEANUP=1
             shift ;;
         --nice)
+            NICE=$2
+            shift 2 ;;
+        --ionice)
             NICE=$2
             shift 2 ;;
         --keep-days)
@@ -87,7 +91,7 @@ CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
 if [ "$DO_CHECK" ] ; then
     echo $CMD
 else
-    ionice -c 3 nice -n $NICE $CMD
+    ionice -c $IONICE nice -n $NICE $CMD
 fi
 
 # cleanup
@@ -110,7 +114,7 @@ PERL
         if [ "$DO_CHECK" ] ; then
             echo rm -rf $bye
         else
-            ionice -c 3 rm -rf $bye
+            ionice -c $IONICE rm -rf $bye
         fi
     done
 fi
