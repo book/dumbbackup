@@ -81,7 +81,7 @@ fi
 
 # remaining arguments are a list of directories to backup
 for SRC ; do
-    SRC="$SRC/**"
+    SRC="${SRC%/}/**"
     while [ "$SRC" != '/' ] ; do
         FILTERS="$FILTERS --include=$SRC"
         SRC=`dirname "$SRC"`
