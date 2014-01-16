@@ -4,7 +4,7 @@
 # - cleanup old backups (keep X dailies, and Y monthlies)
 #   (for a monthly, keep the oldest in that month)
 # - test what happens with weird directories (e.g. with space in the name)
-USAGE="Usage: $0 [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
+USAGE="Usage: $0 [ --server=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
 
 # defaults
 STORE="/backup"
@@ -14,7 +14,7 @@ KEEP_DAYS=10
 KEEP_MONTHS=6
 
 # command-line options
-OPTS=`getopt -o X: --long store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months:,help -n "$0" -- "$@"`
+OPTS=`getopt -o X: --long server:,store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months:,help -n "$0" -- "$@"`
 if [ $? != 0 ] ; then
     echo $USAGE >&2
     exit 1
@@ -25,6 +25,9 @@ while true ; do
     case "$1" in
         -X|--exclude)
             FILTERS="$FILTERS --exclude=$2"
+            shift 2 ;;
+        --server)
+            SERVER="$2"
             shift 2 ;;
         --store)
             STORE="$2"
@@ -63,19 +66,26 @@ while true ; do
             exit 1 ;;
     esac
 done
-FILTERS="$FILTERS --exclude=$STORE"
 
 # directories
 TODAY=`date +%Y-%m-%d`
 DEST=$STORE/$TODAY
-PREV=`ls -d $STORE/????-??-?? | sort | grep -v "$DEST" | tail -1`
+if [ "$SERVER" ] ; then
+    # remote store
+    BACKUPS=`ssh $SERVER ls -d "$STORE/????-??-??"`
+else
+    # local store
+    BACKUPS=`ls -d $STORE/????-??-??`
+    FILTERS="$FILTERS --exclude=$STORE"
+fi
+PREV=`echo "$BACKUPS" | sort | grep -v "$DEST" | tail -1`
 
 # rsync options
 RSYNC_OPTS="$RSYNC_OPTS -aH --partial"
 if [ "$DO_LOG" ] ; then
     RSYNC_OPTS="$RSYNC_OPTS --log-file=$STORE/$TODAY.log"
 fi
-if [ -d "$PREV" ] ; then
+if [ "$PREV" ] ; then
     RSYNC_OPTS="$RSYNC_OPTS --link-dest=$PREV/"
 fi
 
@@ -90,6 +100,9 @@ done
 FILTERS="$FILTERS --exclude=*"
 
 # perform the actual backup
+if [ "$SERVER" ] ; then
+   DEST="$SERVER:$DEST"
+fi
 CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
 if [ "$DO_CHECK" ] ; then
     echo $CMD
@@ -100,10 +113,10 @@ fi
 # cleanup
 if [ "$DO_CLEANUP" ] ; then
     # make the list of backups to delete
-    DELETE=`perl -l - << \PERL $KEEP_MONTHS $KEEP_DAYS $STORE
-    my ($months, $days, $dir) = @ARGV;
+    DELETE=`perl -l - << \PERL $KEEP_MONTHS $KEEP_DAYS "$BACKUPS"
+    my ( $months, $days, $dirs ) = @ARGV;
     my ( %m, %k );
-    @dirs = sort glob "$dir/????-??-??";
+    my @dirs = sort split /\n/, $dirs;
     /\b(\d{4}-\d{2})-\d{2}$/ and push @{ $m{$1} }, $_
       for @dirs;
     $k{$_}++ for grep $_, ( reverse @dirs )[ 0 .. $days - 1 ];
@@ -114,10 +127,17 @@ PERL
 
     # do the delete
     for bye in $DELETE ; do
+        CMD="rm -rf $bye $bye.log"
+        if [ $IONICE -ne 0 ] ; then
+            CMD="ionice -c $IONICE $CMD"
+        fi
+        if [ "$SERVER" ] ; then
+            CMD="ssh $SERVER $CMD"
+        fi
         if [ "$DO_CHECK" ] ; then
-            echo rm -rf "$bye" "$bye.log"
+            echo "$CMD"
         else
-            ionice -c $IONICE rm -rf "$bye" "$bye.log"
+            $CMD
         fi
     done
 fi
