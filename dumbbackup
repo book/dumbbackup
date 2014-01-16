@@ -45,7 +45,7 @@ while true ; do
             NICE=$2
             shift 2 ;;
         --ionice)
-            NICE=$2
+            IONICE=$2
             shift 2 ;;
         --keep-days)
             KEEP_DAYS=$2
