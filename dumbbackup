@@ -104,10 +104,16 @@ if [ "$SERVER" ] ; then
    DEST="$SERVER:$DEST"
 fi
 CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
+if [ $NICE -ne 0 ] ; then
+    CMD="nice -n $NICE $CMD"
+fi
+if [ $IONICE -ne 0 ] ; then
+    CMD="ionice -c $IONICE $CMD"
+fi
 if [ "$DO_CHECK" ] ; then
     echo $CMD
 else
-    ionice -c $IONICE nice -n $NICE $CMD
+    $CMD
 fi
 
 # cleanup
@@ -128,6 +134,9 @@ PERL
     # do the delete
     for bye in $DELETE ; do
         CMD="rm -rf $bye $bye.log"
+        if [ $NICE -ne 0 ] ; then
+            CMD="nice -n $NICE $CMD"
+        fi
         if [ $IONICE -ne 0 ] ; then
             CMD="ionice -c $IONICE $CMD"
         fi
