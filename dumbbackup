@@ -1,10 +1,10 @@
-#!/bin/sh
+#!/bin/bash
 
 # TODO
 # - cleanup old backups (keep X dailies, and Y monthlies)
 #   (for a monthly, keep the oldest in that month)
 # - test what happens with weird directories (e.g. with space in the name)
-USAGE="Usage: $0 [ --server=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
+USAGE="Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
 
 # defaults
 STORE="/backup"
@@ -14,7 +14,7 @@ KEEP_DAYS=10
 KEEP_MONTHS=6
 
 # command-line options
-OPTS=`getopt -o X: --long server:,store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months:,help -n "$0" -- "$@"`
+OPTS=`getopt -o X: --long server:,target:,store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months:,help -n "$0" -- "$@"`
 if [ $? != 0 ] ; then
     echo $USAGE >&2
     exit 1
@@ -28,6 +28,9 @@ while true ; do
             shift 2 ;;
         --server)
             SERVER="$2"
+            shift 2 ;;
+        --target)
+            TARGET="$2"
             shift 2 ;;
         --store)
             STORE="$2"
@@ -90,20 +93,26 @@ if [ "$PREV" ] ; then
 fi
 
 # remaining arguments are a list of directories to backup
-for SRC ; do
-    SRC="${SRC%/}/**"
-    while [ "$SRC" != '/' ] ; do
-        FILTERS="$FILTERS --include=$SRC"
-        SRC=`dirname "$SRC"`
+for ARG ; do
+    ARG="${ARG%/}/**"
+    while [ "$ARG" != '/' ] ; do
+        FILTERS="$FILTERS --include=$ARG"
+        ARG=`dirname "$ARG"`
     done
 done
 FILTERS="$FILTERS --exclude=*"
 
+# compute the source array
+if [ "$TARGET" ] ; then
+    SRC=$(for S in $* ; do echo "$TARGET:$S" ; done )
+else
+    SRC=$*
+fi
 # perform the actual backup
 if [ "$SERVER" ] ; then
    DEST="$SERVER:$DEST"
 fi
-CMD="rsync $RSYNC_OPTS $FILTERS / $DEST"
+CMD="rsync $RSYNC_OPTS $FILTERS $SRC $DEST"
 if [ $NICE -ne 0 ] ; then
     CMD="nice -n $NICE $CMD"
 fi
