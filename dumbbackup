@@ -108,17 +108,25 @@ if [ "$TARGET" ] ; then
 else
     SRC=$*
 fi
-# perform the actual backup
+
+# the actual backup command
 if [ "$SERVER" ] ; then
    DEST="$SERVER:$DEST"
 fi
-CMD="rsync $RSYNC_OPTS $FILTERS $SRC $DEST"
+
+# handle niceness
 if [ $NICE -ne 0 ] ; then
-    CMD="nice -n $NICE $CMD"
+    NICE="nice -n $NICE"
 fi
 if [ $IONICE -ne 0 ] ; then
-    CMD="ionice -c $IONICE $CMD"
+    NICE="ionice -c $IONICE $NICE"
 fi
+if [ "$TARGET" ] ; then
+    CMD="rsync $RSYNC_OPTS --rsync-path='$NICE rsync' $FILTERS $SRC $DEST"
+else
+    CMD="$NICE rsync $RSYNC_OPTS $FILTERS $SRC $DEST"
+fi
+
 if [ "$DO_CHECK" ] ; then
     echo $CMD
 else
