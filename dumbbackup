@@ -28,9 +28,8 @@ my $today = strftime "%Y-%m-%d", localtime;
 my $dest = "$option{store}/$today";
 my @backups;
 if ( $option{server} ) {
-    @backups = sort split /\n/, system 'ssh', $option{server},
-      ls => '-d',
-      "$option{store}/????-??-??";
+    @backups = sort split /\n/,
+      qx{ssh $option{server} ls -d $option{store}/????-??-??};
     $dest = "$option{server}:$dest";
 }
 else {
