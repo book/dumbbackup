@@ -1,169 +1,106 @@
-#!/bin/bash
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Spec;
+use Text::ParseWords 'shellwords';
+use POSIX 'strftime';
+use Data::Dumper;
 
-# TODO
-# - cleanup old backups (keep X dailies, and Y monthlies)
-#   (for a monthly, keep the oldest in that month)
-# - test what happens with weird directories (e.g. with space in the name)
-USAGE="Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ..."
+my $USAGE =
+"Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
+my %option = (
+    store       => '/backup',
+    keep_days   => 10,
+    keep_months => 6,
+);
 
-# defaults
-STORE="/backup"
-IONICE=0
-NICE=0
-KEEP_DAYS=10
-KEEP_MONTHS=6
+GetOptions(
+    \%option, 'server=s', 'target=s', 'store=s', 'check', 'cleanup', 'debug',
+    'nice=i', 'ionice=i', 'exclude=s@', 'keep_months|keep-months=i',
+    'keep_days|keep-days=i', 'rsync_opts|rsync-opts=s',
+) or die $USAGE;
 
-# command-line options
-OPTS=`getopt -o X: --long server:,target:,store:,exclude:,rsync-opts:,log,check,nice:,ionice:,cleanup,keep-days:,keep-months:,help -n "$0" -- "$@"`
-if [ $? != 0 ] ; then
-    echo $USAGE >&2
-    exit 1
-fi
-
-eval set -- "$OPTS"
-while true ; do
-    case "$1" in
-        -X|--exclude)
-            FILTERS="$FILTERS --exclude=$2"
-            shift 2 ;;
-        --server)
-            SERVER="$2"
-            shift 2 ;;
-        --target)
-            TARGET="$2"
-            shift 2 ;;
-        --store)
-            STORE="$2"
-            shift 2 ;;
-        --rsync-opts)
-            RSYNC_OPTS="$RSYNC_OPTS $2"
-            shift 2 ;;
-        --log)
-            DO_LOG=1
-            shift ;;
-        --check)
-            DO_CHECK=1
-            shift ;;
-        --cleanup)
-            DO_CLEANUP=1
-            shift ;;
-        --nice)
-            NICE=$2
-            shift 2 ;;
-        --ionice)
-            IONICE=$2
-            shift 2 ;;
-        --keep-days)
-            KEEP_DAYS=$2
-            shift 2 ;;
-        --keep-months)
-            KEEP_MONTHS=$2
-            shift 2 ;;
-        --help)
-            echo $USAGE >&2
-            exit 0 ;;
-        --) shift ; break ;;
-        *)
-            echo "Internal error!" >&2
-            echo $USAGE            >&2
-            exit 1 ;;
-    esac
-done
-
-# directories
-TODAY=`date +%Y-%m-%d`
-DEST=$STORE/$TODAY
-if [ "$SERVER" ] ; then
-    # remote store
-    BACKUPS=`ssh $SERVER ls -d "$STORE/????-??-??"`
-else
-    # local store
-    BACKUPS=`ls -d $STORE/????-??-??`
-    FILTERS="$FILTERS --exclude=$STORE"
-fi
-PREV=`echo "$BACKUPS" | sort | grep -v "$DEST" | tail -1`
+# various parameters
+my @cmd;
+my @filters = map "--exclude=$_", @{ $option{exclude} };
+my $today = strftime "%Y-%m-%d", localtime;
+my $dest = "$option{store}/$today";
+my @backups;
+if ( $option{server} ) {
+    @backups = sort split /\n/, system 'ssh', $option{server},
+      ls => '-d',
+      "$option{store}/????-??-??";
+    $dest = "$option{server}:$dest";
+}
+else {
+    @backups = sort grep -d, glob "$option{store}/????-??-??";
+    push @filters, "--exclude=$option{store}";
+}
+@backups = grep $_ ne $dest, @backups;
 
 # rsync options
-RSYNC_OPTS="$RSYNC_OPTS -aH --partial"
-if [ "$DO_LOG" ] ; then
-    RSYNC_OPTS="$RSYNC_OPTS --log-file=$STORE/$TODAY.log"
-fi
-if [ "$PREV" ] ; then
-    RSYNC_OPTS="$RSYNC_OPTS --link-dest=$PREV/"
-fi
+my @rsync_opts = qw( -aH --partial );
+push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
+push @rsync_opts, "--link-dest=$backups[-1]"        if @backups;
 
 # remaining arguments are a list of directories to backup
-for ARG ; do
-    ARG="${ARG%/}/**"
-    while [ "$ARG" != '/' ] ; do
-        FILTERS="$FILTERS --include=$ARG"
-        ARG=`dirname "$ARG"`
-    done
-done
-FILTERS="$FILTERS --exclude=*"
-
-# compute the source array
-if [ "$TARGET" ] ; then
-    SRC=$(for S in $* ; do echo "$TARGET:$S" ; done )
-else
-    SRC=$*
-fi
-
-# the actual backup command
-if [ "$SERVER" ] ; then
-   DEST="$SERVER:$DEST"
-fi
+my @src;
+for (@ARGV) {    # assume Unix-like directories with no trailing slash
+    push @src, join ':', $option{target} || (), $_;
+    s{/$}{};
+    push @filters, "--include=$_/**";
+    my @dirs = File::Spec->splitdir($_);
+    while (@dirs) {
+        pop @dirs;
+        my $dir = File::Spec->catdir(@dirs);
+        push @filters, "--include=$dir" if $dir;
+    }
+}
+push @filters, '--exclude=*';
+@filters = do { my %seen; grep !$seen{$_}++, @filters };
 
 # handle niceness
-if [ $NICE -ne 0 ] ; then
-    NICE="nice -n $NICE"
-fi
-if [ $IONICE -ne 0 ] ; then
-    NICE="ionice -c $IONICE $NICE"
-fi
-if [ "$TARGET" ] ; then
-    CMD="rsync $RSYNC_OPTS --rsync-path='$NICE rsync' $FILTERS $SRC $DEST"
-else
-    CMD="$NICE rsync $RSYNC_OPTS $FILTERS $SRC $DEST"
-fi
+my @nice = (
+  ( nice   => '-n', $option{nice}   )x!! $option{nice},
+  ( ionice => '-c', $option{ionice} )x!! $option{ionice}
+);
+if ( $option{target} && @nice ) {
+    push @rsync_opts, "--rsync-path=@nice rsync";
+}
+else {
+    unshift @cmd, @nice;
+}
 
-if [ "$DO_CHECK" ] ; then
-    echo $CMD
-else
-    $CMD
-fi
+# build the rsync command
+push @cmd, rsync => @rsync_opts, @filters, @src, $dest;
+
+if( $option{check} ) {
+    print $option{debug} ? Data::Dumper->Dump( [ \@cmd ], [ '*cmd' ] ) : "@cmd\n";
+}
+else{
+   system @cmd;
+}
 
 # cleanup
-if [ "$DO_CLEANUP" ] ; then
-    # make the list of backups to delete
-    DELETE=`perl -l - << \PERL $KEEP_MONTHS $KEEP_DAYS "$BACKUPS"
-    my ( $months, $days, $dirs ) = @ARGV;
+if ( $option{cleanup} ) {
+    local $Data::Dumper::Indent = 0;
     my ( %m, %k );
-    my @dirs = sort split /\n/, $dirs;
-    /\b(\d{4}-\d{2})-\d{2}$/ and push @{ $m{$1} }, $_
-      for @dirs;
-    $k{$_}++ for grep $_, ( reverse @dirs )[ 0 .. $days - 1 ];
-    $k{ $m{$_}[0] }++ for grep $_, ( reverse sort keys %m )[ 0 .. $months - 1 ];
-    print for grep !$k{$_}, @dirs;
-PERL
-`
-
-    # do the delete
-    for bye in $DELETE ; do
-        CMD="rm -rf $bye $bye.log"
-        if [ $NICE -ne 0 ] ; then
-            CMD="nice -n $NICE $CMD"
-        fi
-        if [ $IONICE -ne 0 ] ; then
-            CMD="ionice -c $IONICE $CMD"
-        fi
-        if [ "$SERVER" ] ; then
-            CMD="ssh $SERVER $CMD"
-        fi
-        if [ "$DO_CHECK" ] ; then
-            echo "$CMD"
-        else
-            $CMD
-        fi
-    done
-fi
+    /\b(\d{4}-\d{2})-\d{2}$/ and push @{ $m{$1} }, $_ for @backups;
+    $k{$_}++ for grep $_, ( reverse @backups )[ 0 .. $option{keep_days} - 1 ];
+    $k{ $m{$_}[0] }++
+      for grep $_, ( reverse sort keys %m )[ 0 .. $option{keep_months} - 1 ];
+    for my $bye ( grep !$k{$_}, @backups ) {
+        my @rm = (
+            $option{server} ? ( ssh => $option{server} ) : (), @nice,
+            rm => '-rf',
+            $bye
+        );
+        if ( $option{check} ) {
+            print $option{debug} ? Data::Dumper->Dump( [ \@rm ], [ '*rm' ] ) : "@rm", "\n";
+        }
+        else {
+            system @rm;
+        }
+    }
+}
