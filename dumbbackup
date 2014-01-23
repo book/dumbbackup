@@ -28,15 +28,15 @@ my $today = strftime "%Y-%m-%d", localtime;
 my $dest = "$option{store}/$today";
 my @backups;
 if ( $option{server} ) {
-    @backups = sort split /\n/,
+    @backups = grep $_ ne $dest, sort split /\n/,
       qx{ssh $option{server} ls -d $option{store}/????-??-??};
     $dest = "$option{server}:$dest";
 }
 else {
-    @backups = sort grep -d, glob "$option{store}/????-??-??";
+    @backups = grep $_ ne $dest, sort grep -d,
+        glob "$option{store}/????-??-??";
     push @filters, "--exclude=$option{store}";
 }
-@backups = grep $_ ne $dest, @backups;
 
 # rsync options
 my @rsync_opts = qw( -aH --partial );
