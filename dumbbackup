@@ -39,7 +39,7 @@ else {
 }
 
 # rsync options
-my @rsync_opts = qw( -aH --partial );
+my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
 push @rsync_opts, "--link-dest=$backups[-1]"        if @backups;
 
