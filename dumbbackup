@@ -13,12 +13,17 @@ my %option = (
     store       => '/backup',
     keep_days   => 10,
     keep_months => 6,
+    keep_years  => 1,
 );
 
 GetOptions(
-    \%option, 'server=s', 'target=s', 'store=s', 'check', 'cleanup', 'debug',
-    'nice=i', 'ionice=i', 'exclude=s@', 'keep_months|keep-months=i',
-    'keep_days|keep-days=i', 'rsync_opts|rsync-opts=s',
+    \%option,                  'debug',
+    'server=s',                'target=s',
+    'store=s',                 'cleanup',
+    'nice=i',                  'ionice=i',
+    'exclude=s@',              'check',
+    'keep_years|keep-years=i', 'keep_months|keep-months=i',
+    'keep_days|keep-days=i',   'rsync_opts|rsync-opts=s',
 ) or die $USAGE;
 
 # various parameters
@@ -84,11 +89,16 @@ else{
 # cleanup
 if ( $option{cleanup} ) {
     local $Data::Dumper::Indent = 0;
-    my ( %m, %k );
-    /\b(\d{4}-\d{2})-\d{2}$/ and push @{ $m{$1} }, $_ for @backups;
+    my ( %y, %m, %k );
+    /\b((\d{4})-\d{2})-\d{2}$/
+      and push @{ $m{$1} }, $_
+      and push @{ $y{$2} }, $_
+      for @backups;
     $k{$_}++ for grep $_, ( reverse @backups )[ 0 .. $option{keep_days} - 1 ];
     $k{ $m{$_}[0] }++
       for grep $_, ( reverse sort keys %m )[ 0 .. $option{keep_months} - 1 ];
+    $k{ $y{$_}[0] }++
+      for grep $_, ( reverse sort keys %y )[ 0 .. $option{keep_years} - 1 ];
     for my $bye ( grep !$k{$_}, @backups ) {
         my @rm = (
             $option{server} ? ( ssh => $option{server} ) : (), @nice,
