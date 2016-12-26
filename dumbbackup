@@ -1,10 +1,13 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
+use v5.010;
+
 use Getopt::Long;
 use File::Spec;
 use Text::ParseWords 'shellwords';
 use POSIX 'strftime';
+use Fcntl qw( :flock );
 use Data::Dumper;
 
 my $USAGE =
@@ -31,6 +34,15 @@ my @cmd;
 my @filters = map "--exclude=$_", @{ $option{exclude} };
 my $today = strftime "%Y-%m-%d", localtime;
 my $dest = "$option{store}/$today";
+
+# acquire the lock
+my $lock = File::Spec->catfile( File::Spec->tmpdir,
+    'dumbbackup-' . $option{server} ? $option{server} : $option{target}
+      // '_' );
+open my $fh, '>', $lock or die "Can't open $lock: $!";
+die "Can't acquire lock on $lock" if !flock( $fh, LOCK_EX | LOCK_NB );
+
+# TODO: should --target and --server be mutually exclusive?
 my @backups;
 if ( $option{server} ) {
     @backups = grep $_ ne $dest, sort split /\n/,
