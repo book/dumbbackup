@@ -37,8 +37,7 @@ my $dest = "$option{store}/$today";
 
 # acquire the lock
 my $lock = File::Spec->catfile( File::Spec->tmpdir,
-    'dumbbackup-' . $option{server} ? $option{server} : $option{target}
-      // '_' );
+    'dumbbackup-' . ( $option{server} // $option{target} // '_' ) );
 open my $fh, '>', $lock or die "Can't open $lock: $!";
 die "Can't acquire lock on $lock" if !flock( $fh, LOCK_EX | LOCK_NB );
 
