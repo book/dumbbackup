@@ -36,8 +36,10 @@ my $today = strftime "%Y-%m-%d", localtime;
 my $dest = "$option{store}/$today";
 
 # acquire the lock
-my $lock = File::Spec->catfile( File::Spec->tmpdir,
-    'dumbbackup-' . ( $option{server} // $option{target} // '_' ) );
+my $lock = File::Spec->catfile( File::Spec->tmpdir, join '-', 'dumbbackup',
+      $option{server} ? ( server => $option{server} )
+    : $option{target} ? ( target => $option{target} )
+    :                   ('local') );
 open my $fh, '>', $lock or die "Can't open $lock: $!";
 die "Can't acquire lock on $lock" if !flock( $fh, LOCK_EX | LOCK_NB );
 
