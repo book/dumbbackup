@@ -41,7 +41,7 @@ my $lock = File::Spec->catfile( File::Spec->tmpdir, join '-', 'dumbbackup',
     : $option{target} ? ( target => $option{target} )
     :                   ('local') );
 open my $fh, '>', $lock or die "Can't open $lock: $!";
-die "Can't acquire lock on $lock" if !flock( $fh, LOCK_EX | LOCK_NB );
+die "Can't acquire lock on $lock: $!" if !flock( $fh, LOCK_EX | LOCK_NB );
 
 # TODO: should --target and --server be mutually exclusive?
 my @backups;
