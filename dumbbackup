@@ -126,3 +126,7 @@ if ( $option{cleanup} ) {
         }
     }
 }
+
+# cleanup
+unlink $lock;
+close $fh;
