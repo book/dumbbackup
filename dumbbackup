@@ -17,6 +17,7 @@ my %option = (
     keep_days   => 10,
     keep_months => 6,
     keep_years  => 1,
+    timeout     => 60,
 );
 
 GetOptions(
@@ -27,6 +28,7 @@ GetOptions(
     'exclude=s@',              'check',
     'keep_years|keep-years=i', 'keep_months|keep-months=i',
     'keep_days|keep-days=i',   'rsync_opts|rsync-opts=s',
+    'timeout=i',
 ) or die $USAGE;
 
 # various parameters
@@ -60,6 +62,7 @@ else {
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
 push @rsync_opts, map "--link-dest=$_", reverse @backups if @backups;
+push @rsync_opts, '--timeout', $option{timeout};
 
 # remaining arguments are a list of directories to backup
 my @src;
