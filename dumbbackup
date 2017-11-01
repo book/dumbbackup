@@ -21,13 +21,15 @@ my %option = (
 );
 
 GetOptions(
-    \%option,                  'debug',
-    'server=s',                'target=s',
-    'store=s',                 'cleanup',
-    'nice=i',                  'ionice=i',
-    'exclude=s@',              'check',
-    'keep_years|keep-years=i', 'keep_months|keep-months=i',
-    'keep_days|keep-days=i',   'rsync_opts|rsync-opts=s',
+    \%option,                    'debug',
+    'server=s',                  'target=s',
+    'store=s',                   'cleanup',
+    'nice=i',                    'ionice=i',
+    'local_nice|local-nice=i',   'local_ionice|local-ionice=i',
+    'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
+    'exclude=s@',                'check',
+    'keep_years|keep-years=i',   'keep_months|keep-months=i',
+    'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s',
     'timeout=i',
 ) or die $USAGE;
 
@@ -58,6 +60,12 @@ else {
     push @filters, "--exclude=$option{store}";
 }
 
+# niceness options
+$option{local_nice}    //= $option{nice};
+$option{remote_nice}   //= $option{nice};
+$option{local_ionice}  //= $option{ionice};
+$option{remote_ionice} //= $option{ionice};
+
 # rsync options
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
@@ -81,15 +89,20 @@ push @filters, '--exclude=*';
 @filters = do { my %seen; grep !$seen{$_}++, @filters };
 
 # handle niceness
-my @nice = (
-  ( nice   => '-n', $option{nice}   )x!! $option{nice},
-  ( ionice => '-c', $option{ionice} )x!! $option{ionice}
+my @local_nice = (
+  ( nice   => '-n', $option{local_nice}   )x!! $option{local_nice},
+  ( ionice => '-c', $option{local_ionice} )x!! $option{local_ionice}
 );
-if ( $option{target} && @nice ) {
-    push @rsync_opts, "--rsync-path=@nice rsync";
+my @remote_nice = (
+  ( nice   => '-n', $option{remote_nice}   )x!! $option{remote_nice},
+  ( ionice => '-c', $option{remote_ionice} )x!! $option{remote_ionice}
+);
+
+if ( $option{target} && @remote_nice ) {
+    push @rsync_opts, "--rsync-path=@remote_nice rsync";
 }
-else {
-    unshift @cmd, @nice;
+elsif ( @local_nice ) {
+    unshift @cmd, @local_nice;
 }
 
 # build the rsync command
@@ -117,7 +130,9 @@ if ( $option{cleanup} ) {
       for grep $_, ( reverse sort keys %y )[ 0 .. $option{keep_years} - 1 ];
     for my $bye ( grep !$k{$_}, @backups ) {
         my @rm = (
-            $option{server} ? ( ssh => $option{server} ) : (), @nice,
+            $option{server}
+            ? ( ssh => $option{server}, @remote_nice )
+            : (@local_nice),
             rm => '-rf',
             $bye
         );
