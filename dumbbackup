@@ -8,7 +8,10 @@ use File::Spec;
 use Text::ParseWords 'shellwords';
 use POSIX 'strftime';
 use Fcntl qw( :flock );
+use List::Util qw( min );
 use Data::Dumper;
+
+use constant MAX_LINK_DEST => 20;
 
 my $USAGE =
 "Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
@@ -69,7 +72,8 @@ $option{remote_ionice} //= $option{ionice};
 # rsync options
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
-push @rsync_opts, map "--link-dest=$_", reverse @backups if @backups;
+push @rsync_opts, map "--link-dest=$_",
+  ( reverse @backups )[ 0 .. min( MAX_LINK_DEST, scalar @backups ) - 1 ];
 push @rsync_opts, '--timeout', $option{timeout};
 
 # remaining arguments are a list of directories to backup
