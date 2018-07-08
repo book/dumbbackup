@@ -60,7 +60,6 @@ if ( $option{server} ) {
 else {
     @backups = grep $_ ne $dest, sort grep -d,
         glob "$option{store}/????-??-??";
-    push @filters, "--exclude=$option{store}";
 }
 
 # niceness options
