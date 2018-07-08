@@ -13,6 +13,12 @@ use Data::Dumper;
 
 use constant MAX_LINK_DEST => 20;
 
+# a backup sort function
+sub by_date {
+    my ( $A, $B ) = map /([0-9]{4}(?:-[0-9]{2}(?:-[0-9]{2})?)?)$/, $a, $b;
+    return $A cmp $B;
+}
+
 my $USAGE =
 "Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
 my %option = (
@@ -53,13 +59,12 @@ die "Can't acquire lock on $lock: $!" if !flock( $fh, LOCK_EX | LOCK_NB );
 # TODO: should --target and --server be mutually exclusive?
 my @backups;
 if ( $option{server} ) {
-    @backups = grep $_ ne $dest, sort split /\n/,
+    @backups = grep $_ ne $dest, split /\n/,
       qx{ssh $option{server} ls -d $option{store}/????-??-??};
     $dest = "$option{server}:$dest";
 }
 else {
-    @backups = grep $_ ne $dest, sort grep -d,
-        glob "$option{store}/????-??-??";
+    @backups = grep $_ ne $dest, grep -d, glob "$option{store}/????-??-??";
 }
 
 # niceness options
@@ -72,7 +77,7 @@ $option{remote_ionice} //= $option{ionice};
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
 push @rsync_opts, map "--link-dest=$_",
-  ( reverse @backups )[ 0 .. min( MAX_LINK_DEST, scalar @backups ) - 1 ];
+  ( reverse sort by_date @backups )[ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
 push @rsync_opts, '--timeout', $option{timeout};
 
 # remaining arguments are a list of directories to backup
@@ -126,11 +131,11 @@ if ( $option{cleanup} ) {
       and push @{ $m{$1} }, $_
       and push @{ $y{$2} }, $_
       for @backups;
-    $k{$_}++ for grep $_, ( reverse @backups )[ 0 .. $option{keep_days} - 1 ];
+    $k{$_}++ for grep $_, ( reverse sort by_date @backups )[ 0 .. $option{keep_days} - 1 ];
     $k{ $m{$_}[0] }++
-      for grep $_, ( reverse sort keys %m )[ 0 .. $option{keep_months} - 1 ];
+      for grep $_, ( reverse sort by_date keys %m )[ 0 .. $option{keep_months} - 1 ];
     $k{ $y{$_}[0] }++
-      for grep $_, ( reverse sort keys %y )[ 0 .. $option{keep_years} - 1 ];
+      for grep $_, ( reverse sort by_date keys %y )[ 0 .. $option{keep_years} - 1 ];
     for my $bye ( grep !$k{$_}, @backups ) {
         my @rm = (
             $option{server}
