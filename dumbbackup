@@ -39,7 +39,7 @@ GetOptions(
     'exclude=s@',                'check',
     'keep_years|keep-years=i',   'keep_months|keep-months=i',
     'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s',
-    'timeout=i',
+    'timeout=i',                 'others=s',
 ) or die $USAGE;
 
 # various parameters
@@ -57,14 +57,19 @@ open my $fh, '>', $lock or die "Can't open $lock: $!";
 die "Can't acquire lock on $lock: $!" if !flock( $fh, LOCK_EX | LOCK_NB );
 
 # TODO: should --target and --server be mutually exclusive?
-my @backups;
+my ( @backups, @others );
 if ( $option{server} ) {
     @backups = grep $_ ne $dest, split /\n/,
       qx{ssh $option{server} ls -d $option{store}/????-??-??};
+    @others = grep $_ ne $dest, split /\n/,
+      qx{ssh $option{server} ls -d $option{others}/????-??-??}
+      if $option{others};
     $dest = "$option{server}:$dest";
 }
 else {
     @backups = grep $_ ne $dest, grep -d, glob "$option{store}/????-??-??";
+    @others  = grep $_ ne $dest, grep -d, glob "$option{others}/????-??-??"
+      if $option{others};
 }
 
 # niceness options
@@ -77,7 +82,7 @@ $option{remote_ionice} //= $option{ionice};
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
 push @rsync_opts, map "--link-dest=$_",
-  ( reverse sort by_date @backups )[ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
+  ( reverse sort by_date @backups, @others )[ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
 push @rsync_opts, '--timeout', $option{timeout};
 
 # remaining arguments are a list of directories to backup
