@@ -81,9 +81,19 @@ $option{remote_ionice} //= $option{ionice};
 # rsync options
 my @rsync_opts = qw( -aH --partial --numeric-ids );
 push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
-push @rsync_opts, map "--link-dest=$_",
-  ( reverse sort by_date @backups, @others )[ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
 push @rsync_opts, '--timeout', $option{timeout};
+
+# link-dest option: merge self with others, sorted by date
+my @link_dest = ( reverse sort by_date @backups, @others )
+  [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
+
+# if there are no self-backups in the selection, push others at the end
+@link_dest =
+  ( ( reverse sort by_date @backups ), ( reverse sort by_date @others ) )
+  [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ]
+  if !grep m{\Q$option{store}\E}, @link_dest;
+
+push @rsync_opts, map "--link-dest=$_", @link_dest;
 
 # remaining arguments are a list of directories to backup
 my @src;
