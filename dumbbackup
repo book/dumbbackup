@@ -20,13 +20,14 @@ sub by_date {
 }
 
 my $USAGE =
-"Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
+"Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --no-backup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
 my %option = (
     store       => '/backup',
     keep_days   => 10,
     keep_months => 6,
     keep_years  => 1,
     timeout     => 60,
+    backup      => 1,
 );
 
 GetOptions(
@@ -40,6 +41,7 @@ GetOptions(
     'keep_years|keep-years=i',   'keep_months|keep-months=i',
     'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s',
     'timeout=i',                 'others=s',
+    'backup!',
 ) or die $USAGE;
 
 # various parameters
@@ -131,11 +133,15 @@ elsif ( @local_nice ) {
 # build the rsync command
 push @cmd, rsync => @rsync_opts, @filters, @src, $dest;
 
-if( $option{check} ) {
-    print $option{debug} ? Data::Dumper->Dump( [ \@cmd ], [ '*cmd' ] ) : "@cmd\n";
-}
-else{
-   system @cmd;
+if ( $option{backup} ) {
+    if ( $option{check} ) {
+        print $option{debug}
+          ? Data::Dumper->Dump( [ \@cmd ], ['*cmd'] )
+          : "@cmd\n";
+    }
+    else {
+        system @cmd;
+    }
 }
 
 # cleanup
