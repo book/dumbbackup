@@ -33,7 +33,7 @@ my %option = (
 GetOptions(
     \%option,                    'debug',
     'server=s',                  'target=s',
-    'store=s',                   'cleanup',
+    'store=s',                   'cleanup!',
     'nice=i',                    'ionice=i',
     'local_nice|local-nice=i',   'local_ionice|local-ionice=i',
     'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
