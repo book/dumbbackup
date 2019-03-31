@@ -39,7 +39,7 @@ GetOptions(
     'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
     'exclude=s@',                'check',
     'keep_years|keep-years=i',   'keep_months|keep-months=i',
-    'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s',
+    'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s@',
     'timeout=i',                 'others=s',
     'backup!',
 ) or die $USAGE;
@@ -82,7 +82,7 @@ $option{remote_ionice} //= $option{ionice};
 
 # rsync options
 my @rsync_opts = qw( -aH --partial --numeric-ids );
-push @rsync_opts, shellwords( $option{rsync_opts} ) if $option{rsync_opts};
+push @rsync_opts, shellwords( $_ ) for @{ $option{rsync_opts} };
 push @rsync_opts, '--timeout', $option{timeout};
 
 # link-dest option: merge self with others, sorted by date
