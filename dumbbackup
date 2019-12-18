@@ -19,6 +19,26 @@ sub by_date {
     return $A cmp $B;
 }
 
+# a wrapper around system
+sub call {
+    my (@cmd) = @_;
+    system @cmd;
+    if ( $? == -1 ) {
+        die "Failed to execute '$cmd[0]': $!\n";
+    }
+    elsif ( $? & 127 ) {
+        die sprintf "'$cmd[0] died with signal %d, %s coredump\n",
+          ( $? & 127 ), ( $? & 128 ) ? 'with' : 'without';
+    }
+    else {
+        if ( my $status = $? >> 8 ) {
+            warn "'$cmd[0]' failed with status $status\n";
+            exit $status;
+        }
+    }
+}
+
+
 my $USAGE =
 "Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --no-backup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
 my %option = (
@@ -140,7 +160,7 @@ if ( $option{backup} ) {
           : "@cmd\n";
     }
     else {
-        system @cmd;
+        call(@cmd);
     }
 }
 
@@ -169,7 +189,7 @@ if ( $option{cleanup} ) {
             print $option{debug} ? Data::Dumper->Dump( [ \@rm ], [ '*rm' ] ) : "@rm", "\n";
         }
         else {
-            system @rm;
+            call(@rm);
         }
     }
 }
