@@ -42,6 +42,7 @@ sub call {
 my $USAGE =
 "Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --no-backup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
 my %option = (
+    backup      => 1,
     store       => '/backup',
     keep_days   => 10,
     keep_months => 6,
@@ -53,7 +54,8 @@ my %option = (
 GetOptions(
     \%option,                    'debug',
     'server=s',                  'target=s',
-    'store=s',                   'cleanup!',
+    'store=s',
+    'backup!',                   'cleanup!',
     'nice=i',                    'ionice=i',
     'local_nice|local-nice=i',   'local_ionice|local-ionice=i',
     'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
@@ -100,39 +102,6 @@ $option{remote_nice}   //= $option{nice};
 $option{local_ionice}  //= $option{ionice};
 $option{remote_ionice} //= $option{ionice};
 
-# rsync options
-my @rsync_opts = qw( -aH --partial --numeric-ids );
-push @rsync_opts, shellwords( $_ ) for @{ $option{rsync_opts} };
-push @rsync_opts, '--timeout', $option{timeout};
-
-# link-dest option: merge self with others, sorted by date
-my @link_dest = ( reverse sort by_date @backups, @others )
-  [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
-
-# if there are no self-backups in the selection, push others at the end
-@link_dest =
-  ( ( reverse sort by_date @backups ), ( reverse sort by_date @others ) )
-  [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ]
-  if !grep m{\Q$option{store}\E}, @link_dest;
-
-push @rsync_opts, map "--link-dest=$_", @link_dest;
-
-# remaining arguments are a list of directories to backup
-my @src;
-for (@ARGV) {    # assume Unix-like directories with no trailing slash
-    push @src, join ':', $option{target} || (), $_;
-    s{/$}{};
-    push @filters, "--include=$_/**";
-    my @dirs = File::Spec->splitdir($_);
-    while (@dirs) {
-        pop @dirs;
-        my $dir = File::Spec->catdir(@dirs);
-        push @filters, "--include=$dir" if $dir;
-    }
-}
-push @filters, '--exclude=*';
-@filters = do { my %seen; grep !$seen{$_}++, @filters };
-
 # handle niceness
 my @local_nice = (
   ( nice   => '-n', $option{local_nice}   )x!! $option{local_nice},
@@ -143,24 +112,60 @@ my @remote_nice = (
   ( ionice => '-c', $option{remote_ionice} )x!! $option{remote_ionice}
 );
 
-if ( $option{target} && @remote_nice ) {
-    push @rsync_opts, "--rsync-path=@remote_nice rsync";
-}
-elsif ( @local_nice ) {
-    unshift @cmd, @local_nice;
-}
-
-# build the rsync command
-push @cmd, rsync => @rsync_opts, @filters, @src, $dest;
-
 if ( $option{backup} ) {
-    if ( $option{check} ) {
-        print $option{debug}
-          ? Data::Dumper->Dump( [ \@cmd ], ['*cmd'] )
-          : "@cmd\n";
+
+    # rsync options
+    my @rsync_opts = qw( -aH --partial --numeric-ids );
+    push @rsync_opts, shellwords( $_ ) for @{ $option{rsync_opts} };
+    push @rsync_opts, '--timeout', $option{timeout};
+
+    # link-dest option: merge self with others, sorted by date
+    my @link_dest = ( reverse sort by_date @backups, @others )
+      [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ];
+
+    # if there are no self-backups in the selection, push others at the end
+    @link_dest =
+      ( ( reverse sort by_date @backups ), ( reverse sort by_date @others ) )
+      [ 0 .. min( MAX_LINK_DEST, @backups + @others ) - 1 ]
+      if !grep m{\Q$option{store}\E}, @link_dest;
+
+    push @rsync_opts, map "--link-dest=$_", @link_dest;
+
+    # remaining arguments are a list of directories to backup
+    my @src;
+    for (@ARGV) {    # assume Unix-like directories with no trailing slash
+        push @src, join ':', $option{target} || (), $_;
+        s{/$}{};
+        push @filters, "--include=$_/**";
+        my @dirs = File::Spec->splitdir($_);
+        while (@dirs) {
+            pop @dirs;
+            my $dir = File::Spec->catdir(@dirs);
+            push @filters, "--include=$dir" if $dir;
+        }
     }
-    else {
-        call(@cmd);
+    push @filters, '--exclude=*';
+    @filters = do { my %seen; grep !$seen{$_}++, @filters };
+
+    if ( $option{target} && @remote_nice ) {
+        push @rsync_opts, "--rsync-path=@remote_nice rsync";
+    }
+    elsif ( @local_nice ) {
+        unshift @cmd, @local_nice;
+    }
+
+    # build the rsync command
+    push @cmd, rsync => @rsync_opts, @filters, @src, $dest;
+
+    if ( $option{backup} ) {
+        if ( $option{check} ) {
+            print $option{debug}
+              ? Data::Dumper->Dump( [ \@cmd ], ['*cmd'] )
+              : "@cmd\n";
+        }
+        else {
+            call(@cmd);
+        }
     }
 }
 
