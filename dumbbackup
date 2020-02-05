@@ -13,6 +13,33 @@ use Data::Dumper;
 
 use constant MAX_LINK_DEST => 20;
 
+my $USAGE =
+"Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --no-backup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
+my %option = (
+    backup      => 1,
+    store       => '/backup',
+    keep_days   => 10,
+    keep_months => 6,
+    keep_years  => 1,
+    timeout     => 60,
+    backup      => 1,
+);
+
+GetOptions(
+    \%option,                    'store=s',
+    'server=s',                  'target=s',
+    'verbose',                   'debug',
+    'backup!',                   'cleanup!',
+    'nice=i',                    'ionice=i',
+    'local_nice|local-nice=i',   'local_ionice|local-ionice=i',
+    'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
+    'exclude=s@',                'check',
+    'keep_years|keep-years=i',   'keep_months|keep-months=i',
+    'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s@',
+    'timeout=i',                 'others=s',
+    'backup!',
+) or die $USAGE;
+
 # a backup sort function
 sub by_date {
     my ( $A, $B ) = map /([0-9]{4}(?:-[0-9]{2}(?:-[0-9]{2})?)?)$/, $a, $b;
@@ -22,6 +49,7 @@ sub by_date {
 # a wrapper around system
 sub call {
     my (@cmd) = @_;
+    print "# @cmd\n" if $option{verbose};
     system @cmd;
     if ( $? == -1 ) {
         die "Failed to execute '$cmd[0]': $!\n";
@@ -37,34 +65,6 @@ sub call {
         }
     }
 }
-
-
-my $USAGE =
-"Usage: $0 [ --server|target=hostname ] [ --store=dir ] [ --check ] [ --cleanup ] [ --no-backup ] [ --nice=N ] [ --ionice=N ] [ --rsync-opts=OPTS ] [ --exclude=PATTERN ] dir1 dir2 ...";
-my %option = (
-    backup      => 1,
-    store       => '/backup',
-    keep_days   => 10,
-    keep_months => 6,
-    keep_years  => 1,
-    timeout     => 60,
-    backup      => 1,
-);
-
-GetOptions(
-    \%option,                    'debug',
-    'server=s',                  'target=s',
-    'store=s',
-    'backup!',                   'cleanup!',
-    'nice=i',                    'ionice=i',
-    'local_nice|local-nice=i',   'local_ionice|local-ionice=i',
-    'remote_nice|remote-nice=i', 'remote_ionice|remote-ionice=i',
-    'exclude=s@',                'check',
-    'keep_years|keep-years=i',   'keep_months|keep-months=i',
-    'keep_days|keep-days=i',     'rsync_opts|rsync-opts=s@',
-    'timeout=i',                 'others=s',
-    'backup!',
-) or die $USAGE;
 
 # various parameters
 my @cmd;
