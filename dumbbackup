@@ -73,12 +73,15 @@ my $today = strftime "%Y-%m-%d", localtime;
 my $dest = "$option{store}/$today";
 
 # acquire the lock
-my $lock = File::Spec->catfile( File::Spec->tmpdir, join '-', 'dumbbackup',
-      $option{server} ? ( server => $option{server} )
-    : $option{target} ? ( target => $option{target} )
-    :                   ('local') );
-open my $fh, '>', $lock or die "Can't open $lock: $!";
-die "Can't acquire lock on $lock: $!" if !flock( $fh, LOCK_EX | LOCK_NB );
+my ( $lock, $fh );
+if ( $option{backup} ) {
+    $lock = File::Spec->catfile( File::Spec->tmpdir, join '-', 'dumbbackup',
+          $option{server} ? ( server => $option{server} )
+        : $option{target} ? ( target => $option{target} )
+        :                   ('local') );
+    open $fh, '>', $lock or die "Can't open $lock: $!";
+    die "Can't acquire lock on $lock: $!" if !flock( $fh, LOCK_EX | LOCK_NB );
+}
 
 # TODO: should --target and --server be mutually exclusive?
 my ( @backups, @others );
@@ -169,6 +172,12 @@ if ( $option{backup} ) {
     }
 }
 
+# release the lock
+if ($option{backup}) {
+    unlink $lock;
+    close $fh;
+}
+
 # cleanup
 if ( $option{cleanup} ) {
     local $Data::Dumper::Indent = 0;
@@ -198,7 +207,3 @@ if ( $option{cleanup} ) {
         }
     }
 }
-
-# cleanup
-unlink $lock;
-close $fh;
