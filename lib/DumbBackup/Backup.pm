@@ -7,12 +7,7 @@ use POSIX            qw( strftime );
 use Fcntl            qw( :flock );
 use List::Util       qw( min );
 use Text::ParseWords qw( shellwords );
-
-# a backup sort function
-sub by_date {
-    my ( $A, $B ) = map /([0-9]{4}(?:-[0-9]{2}(?:-[0-9]{2})?)?)$/, $a, $b;
-    return $A cmp $B;
-}
+use DumbBackup::Sort qw( by_date );
 
 # force compile-time resolution, see namespace::clean documentation
 my $by_date = \&by_date;
