@@ -1,0 +1,142 @@
+#!/usr/bin/env perl
+use 5.024;
+use warnings;
+
+use App::FatPacker;
+use Module::CoreList;
+use Perl::PrereqScanner;
+use File::Find;
+use Getopt::Long;
+
+my $PERL_VERSION = 5.024;
+
+GetOptions( \my %options, 'verbose' )
+  or die "Usage: $0 [ -verbose ]\n";
+
+use Data::Dumper;
+$Data::Dumper::Sortkeys  = 1;
+$Data::Dumper::Quotekeys = 0;
+
+sub scan {
+    my @to_scan = @_;
+    my $scanner = Perl::PrereqScanner->new;
+    my @dirs    = grep -d, @to_scan;
+
+    # optional dependencies we don't need/want to pack
+    my %skip = (
+        'strictures'                         => 1,
+        'B::Hooks::EndOfScope::PP::HintHash' => 1,    # only for Perl < 5.010
+        'Class::C3'                          => 0,    # don't skip, but don't scan
+        'Devel::GlobalDestruction'           => 1,    # only for Perl < 5.014
+        'MRO::Compat'                        => 1,    # only for Perl < 5.010
+        'Method::Generate::DemolishAll'      => 1,    # no DEMOLISH in our code
+        'Moo::HandleMoose'                   => 0,    # don't skip, but don't scan
+        'Moo::HandleMoose::FakeMetaClass'    => 1,    # no ->meta
+        'Moo::HandleMoose::_TypeMap'         => 0,    # don't skip, but don't scan
+        'Moo::sification'                    => 0,    # don't skip, but don't scan
+        'Moose'                              => 1,
+        'Package::Stash::PP'                 => 1,    # only for Perl < 5.008007
+        'Sub::Exporter'                      => 1,
+        'Sub::Name'                          => 1,
+        'Sub::Util'                          => 1,
+    );
+
+    # force pure Perl dependencies
+    my %pp_impl = (
+        'B::Hooks::EndOfScope' => 'B::Hooks::EndOfScope::PP',
+        'Package::Stash'       => 'Package::Stash::PP',
+    );
+
+    # module_name = Foo::Bar
+    # module_file = Foo/Bar.pm
+    # module_path = lib/Foo/Bar.pm
+
+    my ( %prereqs, %seen );
+    while ( my $path = shift @to_scan ) {
+        next if $seen{$path}++;
+
+        # recurse into directories to find .pm files to scan
+        if ( -d $path ) {
+            find(
+                sub {
+                    if ( -f && /\.pm\z/ ) {
+                        my $module_file = $File::Find::name =~ s<\A\Q$path\E/?><>r;
+                        my $module_name = $module_file      =~ s</><::>gr =~ s<\.pm\z><>r;
+                        if ( !$skip{$module_name} ) {
+                            $prereqs{$module_file} = $File::Find::name;
+                            push @to_scan, $File::Find::name
+                              if !exists $skip{$module_name};
+                        }
+                    }
+                },
+                $path
+            );
+        }
+
+        # scan regular files
+        else {
+            for my $module_name ( keys $scanner->scan_file($path)->as_string_hash->%* ) {
+                if ( $skip{$module_name} ) {
+                    say "SKIP $module_name (hard-coded)"
+                      if $options{verbose};
+		    next;
+                }
+
+                # queue the pure Perl implementation for scanning
+                if ( $pp_impl{$module_name} ) {
+                    my $impl_file = $pp_impl{$module_name} =~ s<::></>gr . '.pm';
+                    my ($impl_path) = grep -r, map "$_/$impl_file", @dirs, @INC;
+                    $prereqs{$impl_file} = $impl_path;
+                    push @to_scan, $impl_path;
+                }
+
+		# queue the dependency for scanning
+                my $module_file = $module_name =~ s<::></>gr . '.pm';
+                my ($module_path) = grep -r, map "$_/$module_file", @dirs, @INC;
+                if ($module_path) {
+                    $prereqs{$module_file} = $module_path;
+                    push @to_scan, $module_path
+                      if !exists $skip{$module_name};
+                }
+            }
+        }
+    }
+
+    # grab the source for all modules we'll pack
+    my %source_for;
+    for my $module_file ( sort keys %prereqs ) {
+        my $module_name = $module_file =~ s</><::>gr =~ s<\.pm\z><>r;
+        if ( Module::CoreList::is_core( $module_name, undef, $PERL_VERSION ) ) {
+            say "SKIP $module_name (core in Perl $PERL_VERSION)"
+              if $options{verbose};
+        }
+        else {
+            my ($module_path) = grep -r, map "$_/$module_file", @dirs, @INC;
+            die "$module_name not found in \@INC\n" unless $module_path;
+            say "PACK $module_name [$module_path]";
+            $source_for{$module_file} = do {
+                local $/;
+                local @ARGV = $module_path;
+                <>                              # slurp the whole file
+                  =~ s<^__END__.*><>mrs         # drop anything after __END__
+                  =~ s<^=[a-z].*?^=cut><>mrs    # drop remaining documentation
+                  ;
+            };
+        }
+    }
+
+    return %source_for;
+}
+
+sub pack_as {
+    my ( $unpacked, $packed, @extras ) = @_;
+    my $packer  = App::FatPacker->new;
+    my %prereqs = scan( $unpacked, @extras );
+    my ( $shebang, $script ) = $packer->load_main_script($unpacked);
+    open my $fh, '>', $packed or die "Can't open $packed for writing: $!";
+    print $fh join "\n", $shebang, $packer->fatpack_code( \%prereqs ), $script;
+    close $fh;
+    chmod 0755, $packed;
+}
+
+pack_as( 'unpacked-dumbbackup' => 'dumbbackup', 'lib' );
