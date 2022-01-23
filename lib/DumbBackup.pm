@@ -8,9 +8,11 @@ use feature 'signatures';
 no warnings 'experimental::signatures';
 
 my %subcommand = (
-    run    => 'Backup',
-    now    => 'Backup',
-    backup => 'Backup',
+    backup  => 'Backup',
+    run     => 'Backup',
+    now     => 'Backup',
+    cleanup => 'Cleanup',
+    keep    => 'Cleanup',
 );
 
 sub run ( $self, @args ) {
