@@ -131,11 +131,12 @@ sub call ( $self ) {
     my @cmd;
     my @remote_nice = $self->remote_nice;
     my @local_nice  = $self->local_nice;
-    if ( $options->{target} && @remote_nice ) {
-        # TODO: if --rsync-path was passed, replace 'rsync' below by that value
-        push @rsync_opts, "--rsync-path=@remote_nice rsync";
+    if ( @remote_nice ) {
+        @rsync_opts = map s{\A--rsync-path=}{$&@remote_nice }r, @rsync_opts;
+        push @rsync_opts, "--rsync-path=@remote_nice rsync"
+           unless grep /\A--rsync-path=/, @rsync_opts;
     }
-    elsif ( @local_nice ) {
+    if ( @local_nice ) {
         unshift @cmd, @local_nice;
     }
 
