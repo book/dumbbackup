@@ -414,15 +414,15 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   no warnings 'experimental::signatures';
   use feature 'signatures';
   
-  with 'DumbBackup::Command';
+  with
+    'DumbBackup::Nice',
+    'DumbBackup::Command',
+    ;
   
   sub options_spec {
       qw(
         store=s                    others!
         server=s                   target=s
-        nice=i                     ionice=i
-        local_nice|local-nice=i    local_ionice|local-ionice=i
-        remote_nice|remote-nice=i  remote_ionice|remote-ionice=i
         rsync_opts|rsync-opts=s@   exclude=s@
         dry_run|dry-run
       );
@@ -484,22 +484,6 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
             if $options->{others};
       }
   
-      # niceness options
-      $options->{local_nice}    //= $options->{nice};
-      $options->{remote_nice}   //= $options->{nice};
-      $options->{local_ionice}  //= $options->{ionice};
-      $options->{remote_ionice} //= $options->{ionice};
-  
-      # handle niceness
-      my @local_nice = (
-        ( nice   => '-n', $options->{local_nice}   )x!! $options->{local_nice},
-        ( ionice => '-c', $options->{local_ionice} )x!! $options->{local_ionice}
-      );
-      my @remote_nice = (
-        ( nice   => '-n', $options->{remote_nice}   )x!! $options->{remote_nice},
-        ( ionice => '-c', $options->{remote_ionice} )x!! $options->{remote_ionice}
-      );
-  
       # rsync options
       my @rsync_opts = qw( -aH --partial --numeric-ids );
       push @rsync_opts, shellwords( $_ ) for @{ $options->{rsync_opts} };
@@ -539,11 +523,14 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   
       # build the actual command
       my @cmd;
-      if ( $options->{target} && @remote_nice ) {
-          # TODO: if --rsync-path was passed, replace 'rsync' below by that value
-          push @rsync_opts, "--rsync-path=@remote_nice rsync";
+      my @remote_nice = $self->remote_nice;
+      my @local_nice  = $self->local_nice;
+      if ( @remote_nice ) {
+          @rsync_opts = map s{\A--rsync-path=}{$&@remote_nice }r, @rsync_opts;
+          push @rsync_opts, "--rsync-path=@remote_nice rsync"
+             unless grep /\A--rsync-path=/, @rsync_opts;
       }
-      elsif ( @local_nice ) {
+      if ( @local_nice ) {
           unshift @cmd, @local_nice;
       }
   
@@ -581,7 +568,10 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   no warnings 'experimental::signatures';
   use feature 'signatures';
   
-  with 'DumbBackup::Command';
+  with
+    'DumbBackup::Nice',
+    'DumbBackup::Command',
+    ;
   
   sub options_spec {
       qw(
@@ -630,10 +620,9 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
         for grep $_, ( reverse sort $by_date keys %y )[ 0 .. $options->{years} - 1 ];
   
       # remove everything we don't want to keep
+      my @local_nice  = $self->local_nice;
       for my $bye ( grep !$keep{$_}, @backups ) {
-          my @rm = ( #@local_nice, 
-                  rm => '-rf', ( '-v' )x!! $options->{verbose},
-                  $bye);
+          my @rm = ( @local_nice, rm => '-rf', ( '-v' )x!! $options->{verbose}, $bye);
           $self->run_command(@rm);
       }
   
@@ -710,6 +699,56 @@ $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   
   1;
 DUMBBACKUP_COMMAND
+
+$fatpacked{"DumbBackup/Nice.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_NICE';
+  package DumbBackup::Nice;
+  use 5.024;
+  use warnings;
+  
+  use Moo::Role;
+  use namespace::clean;
+  
+  no warnings 'experimental::signatures';
+  use feature 'signatures';
+  
+  around options_spec => sub ( $orig, @args ) {
+      return (
+          $orig->(@args),
+          qw(
+            nice=i                     ionice=i
+            local_nice|local-nice=i    local_ionice|local-ionice=i
+            remote_nice|remote-nice=i  remote_ionice|remote-ionice=i
+            ),
+      );
+  };
+  
+  # niceness options
+  before BUILD => sub ( $self, $args ) {
+      my $options = $self->options;
+      $options->{local_nice}    //= $options->{nice};
+      $options->{remote_nice}   //= $options->{nice};
+      $options->{local_ionice}  //= $options->{ionice};
+      $options->{remote_ionice} //= $options->{ionice};
+  };
+  
+  sub local_nice ($self) {
+      my $options = $self->options;
+      return (
+          ( nice   => '-n', $options->{local_nice}   )x!! $options->{local_nice},
+          ( ionice => '-c', $options->{local_ionice} )x!! $options->{local_ionice}
+      );
+  }
+  
+  sub remote_nice ($self) {
+      my $options = $self->options;
+      return (
+          ( nice   => '-n', $options->{remote_nice}   )x!! $options->{remote_nice},
+          ( ionice => '-c', $options->{remote_ionice} )x!! $options->{remote_ionice}
+      );
+  }
+  
+  1;
+DUMBBACKUP_NICE
 
 $fatpacked{"DumbBackup/Sort.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_SORT';
   package DumbBackup::Sort;

@@ -18,7 +18,10 @@ use namespace::clean;
 no warnings 'experimental::signatures';
 use feature 'signatures';
 
-with 'DumbBackup::Command';
+with
+  'DumbBackup::Nice',
+  'DumbBackup::Command',
+  ;
 
 sub options_spec {
     qw(
@@ -67,10 +70,9 @@ sub call ($self) {
       for grep $_, ( reverse sort $by_date keys %y )[ 0 .. $options->{years} - 1 ];
 
     # remove everything we don't want to keep
+    my @local_nice  = $self->local_nice;
     for my $bye ( grep !$keep{$_}, @backups ) {
-        my @rm = ( #@local_nice, 
-                rm => '-rf', ( '-v' )x!! $options->{verbose},
-                $bye);
+        my @rm = ( @local_nice, rm => '-rf', ( '-v' )x!! $options->{verbose}, $bye);
         $self->run_command(@rm);
     }
 

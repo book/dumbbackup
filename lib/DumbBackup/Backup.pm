@@ -20,15 +20,15 @@ use namespace::clean;
 no warnings 'experimental::signatures';
 use feature 'signatures';
 
-with 'DumbBackup::Command';
+with
+  'DumbBackup::Nice',
+  'DumbBackup::Command',
+  ;
 
 sub options_spec {
     qw(
       store=s                    others!
       server=s                   target=s
-      nice=i                     ionice=i
-      local_nice|local-nice=i    local_ionice|local-ionice=i
-      remote_nice|remote-nice=i  remote_ionice|remote-ionice=i
       rsync_opts|rsync-opts=s@   exclude=s@
       dry_run|dry-run
     );
@@ -90,22 +90,6 @@ sub call ( $self ) {
           if $options->{others};
     }
 
-    # niceness options
-    $options->{local_nice}    //= $options->{nice};
-    $options->{remote_nice}   //= $options->{nice};
-    $options->{local_ionice}  //= $options->{ionice};
-    $options->{remote_ionice} //= $options->{ionice};
-
-    # handle niceness
-    my @local_nice = (
-      ( nice   => '-n', $options->{local_nice}   )x!! $options->{local_nice},
-      ( ionice => '-c', $options->{local_ionice} )x!! $options->{local_ionice}
-    );
-    my @remote_nice = (
-      ( nice   => '-n', $options->{remote_nice}   )x!! $options->{remote_nice},
-      ( ionice => '-c', $options->{remote_ionice} )x!! $options->{remote_ionice}
-    );
-
     # rsync options
     my @rsync_opts = qw( -aH --partial --numeric-ids );
     push @rsync_opts, shellwords( $_ ) for @{ $options->{rsync_opts} };
@@ -145,11 +129,14 @@ sub call ( $self ) {
 
     # build the actual command
     my @cmd;
-    if ( $options->{target} && @remote_nice ) {
-        # TODO: if --rsync-path was passed, replace 'rsync' below by that value
-        push @rsync_opts, "--rsync-path=@remote_nice rsync";
+    my @remote_nice = $self->remote_nice;
+    my @local_nice  = $self->local_nice;
+    if ( @remote_nice ) {
+        @rsync_opts = map s{\A--rsync-path=}{$&@remote_nice }r, @rsync_opts;
+        push @rsync_opts, "--rsync-path=@remote_nice rsync"
+           unless grep /\A--rsync-path=/, @rsync_opts;
     }
-    elsif ( @local_nice ) {
+    if ( @local_nice ) {
         unshift @cmd, @local_nice;
     }
 
