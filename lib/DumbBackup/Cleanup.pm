@@ -7,10 +7,6 @@ use POSIX            qw( strftime );
 use Fcntl            qw( :flock );
 use List::Util       qw( min );
 use Text::ParseWords qw( shellwords );
-use DumbBackup::Sort qw( by_date );
-
-# force compile-time resolution, see namespace::clean documentation
-my $by_date = \&by_date;
 
 use Moo;
 use namespace::clean;
@@ -27,17 +23,24 @@ sub options_spec {
     qw(
       store=s
       days|keep-days=i
+      weeks|keep-days=i
       months|keep-months=i
       years|keep-years=i
       dry_run|dry-run       verbose
     );
 }
 
+# default to keep is half of the larger period, rounded up
+# - days:   a week  is 7 seven days      => keep 4
+# - weeks:  a month is 5 weeks (at most) => keep 3
+# - months: a year  is 12 months         => keep 6
+# - years:  keep 2, the current one and the previous one
 sub options_defaults {
     (
-        years  => 1,
+        days   => 4,
+        weeks  => 3,
         months => 6,
-        days   => 10,
+        years  => 2,
     );
 }
 
@@ -47,27 +50,38 @@ sub BUILD ( $self, $args ) {
         if !$options->{store};
 }
 
+my %bucket_fmt = (
+    days   => '%Y-%m-%d',
+    weeks  => '%Y-%W',
+    months => '%Y-%m',
+    years  => '%Y',
+);
+
 sub call ($self) {
     my $options = $self->options;
     my $today   = strftime "%Y-%m-%d", localtime;
     my $dest    = "$options->{store}/$today";
 
+    # never delete today's backup
     my @backups = grep $_ ne $dest, grep -d, glob "$options->{store}/????-??-??";
-    my %keep;
 
     # separate backups in the corresponding buckets
-    my ( %y, %m );
-    /\b((\d{4})-\d{2})-\d{2}$/
-      and push @{ $m{$1} }, $_
-      and push @{ $y{$2} }, $_
-      for @backups;
+    my %bucket;
+    for my $backup ( sort @backups ) {
+        my ( $y, $m, $d ) = $backup =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
+        for my $period ( keys %bucket_fmt ) {
+            my $key = strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+            push $bucket{$period}{$key}->@*, $backup;
+        }
+    }
 
-    # keep the requested numbers in each sieve
-    $keep{$_}++ for grep $_, ( reverse sort $by_date @backups )[ 0 .. $options->{days} - 1 ];
-    $keep{ $m{$_}[0] }++
-      for grep $_, ( reverse sort $by_date keys %m )[ 0 .. $options->{months} - 1 ];
-    $keep{ $y{$_}[0] }++
-      for grep $_, ( reverse sort $by_date keys %y )[ 0 .. $options->{years} - 1 ];
+    # for each period, keep the oldest item in the selected most recent buckets
+    my %keep;
+    for my $period ( keys %bucket_fmt ) {
+        my @keep = reverse sort keys $bucket{$period}->%*;
+        splice @keep, $options->{$period};
+        $keep{ $bucket{$period}{$_}[0] }++ for @keep;
+    }
 
     # remove everything we don't want to keep
     my @local_nice  = $self->local_nice;
