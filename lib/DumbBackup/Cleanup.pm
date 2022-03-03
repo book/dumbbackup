@@ -97,14 +97,10 @@ sub retention_hash ( $self, @backups ) {
 
 sub call ($self) {
     my $options = $self->options;
-    my $today   = strftime "%Y-%m-%d", localtime;
-    my $dest    = "$options->{store}/$today";
-
-    # never delete today's backup
-    my @backups = grep $_ ne $dest, grep -d, glob "$options->{store}/????-??-??";
 
     # compute the retention hash
-    my $keep = $self->retention_hash(@backups);
+    my @backups = grep -d, glob "$options->{store}/????-??-??";
+    my $keep    = $self->retention_hash(@backups);
 
     # remove everything we don't want to keep
     my @local_nice  = $self->local_nice;
