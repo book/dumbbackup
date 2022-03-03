@@ -3,7 +3,7 @@ use 5.024;
 use warnings;
 
 use File::Spec       qw();
-use POSIX            qw( strftime );
+use POSIX            qw( strftime ceil );
 use Fcntl            qw( :flock );
 use List::Util       qw( min );
 use Text::ParseWords qw( shellwords );
@@ -25,22 +25,25 @@ sub options_spec {
       days|keep-days=i
       weeks|keep-days=i
       months|keep-months=i
+      quarters|keep-quarters=i
       years|keep-years=i
       dry_run|dry-run       verbose
     );
 }
 
-# default to keep is half of the larger period, rounded up
-# - days:   a week  is 7 seven days      => keep 4
-# - weeks:  a month is 5 weeks (at most) => keep 3
-# - months: a year  is 12 months         => keep 6
-# - years:  keep 2, the current one and the previous one
+# default to keep is enough of one periodicity to cover the enclosing periodicity
+# - days:     a week  is 7 seven days      => keep 6
+# - weeks:    a month is 5 weeks (at most) => keep 4
+# - months:   a quarter is 3 months        => keep 2
+# - quarters: a year is 4 quarters         => keep 3
+# - years:    keep 2, the current one and the previous one
 sub options_defaults {
     (
-        days   => 4,
-        weeks  => 3,
-        months => 6,
-        years  => 2,
+        days     => 6,
+        weeks    => 4,
+        months   => 2,
+        quarters => 3,
+        years    => 2,
     );
 }
 
@@ -51,10 +54,11 @@ sub BUILD ( $self, $args ) {
 }
 
 my %bucket_fmt = (
-    days   => '%Y-%m-%d',
-    weeks  => '%Y-%W',
-    months => '%Y-%m',
-    years  => '%Y',
+    days     => '%Y-%m-%d',
+    weeks    => '%Y-%W',
+    months   => '%Y-%m',
+    quarters => '%Y-%Q', # non-standard format!
+    years    => '%Y',
 );
 
 sub _buckets_for ($date) {
@@ -62,6 +66,7 @@ sub _buckets_for ($date) {
     my %bucket;
     for my $period ( keys %bucket_fmt ) {
         my $key = strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+        $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
         $bucket{$period} = $key;
     }
     return %bucket;
