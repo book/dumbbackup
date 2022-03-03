@@ -57,15 +57,24 @@ my %bucket_fmt = (
     years  => '%Y',
 );
 
+sub _buckets_for ($date) {
+    my ( $y, $m, $d ) = $date =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
+    my %bucket;
+    for my $period ( keys %bucket_fmt ) {
+        my $key = strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+        $bucket{$period} = $key;
+    }
+    return %bucket;
+}
+
 sub retention_hash ( $self, @backups ) {
     my $options = $self->options;
 
     # separate backups in the corresponding buckets
     my %bucket;
     for my $backup ( sort @backups ) {
-        my ( $y, $m, $d ) = $backup =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
-        for my $period ( keys %bucket_fmt ) {
-            my $key = strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+	my @bucket_pairs = _buckets_for( $backup );
+	while( my ($period, $key) = splice @bucket_pairs, 0, 2 ) {
             push $bucket{$period}{$key}->@*, $backup;
         }
     }

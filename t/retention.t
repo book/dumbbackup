@@ -6,6 +6,33 @@ use Time::Local qw( timegm );
 use POSIX qw( strftime );
 use DumbBackup::Cleanup;
 
+# test bucket computation
+my @bucket_tests = (
+    '2022-06-01' => {
+        days   => '2022-06-01',
+        weeks  => '2022-22',
+        months => '2022-06',
+        years  => '2022',
+    },
+    '2023-01-01' => {
+        days   => '2023-01-01',
+        weeks  => '2023-00',
+        months => '2023-01',
+        years  => '2023',
+    },
+    '2023-12-31' => {
+        days   => '2023-12-31',
+        weeks  => '2023-52',
+        months => '2023-12',
+        years  => '2023',
+    },
+);
+
+while ( my ( $date, $buckets ) = splice @bucket_tests, 0, 2 ) {
+    is_deeply( { DumbBackup::Cleanup::_buckets_for($date) },
+        $buckets, "buckets for $date" );
+}
+
 # build 2 years worth of backups starting from 2022-01-01
 my @backups;
 my $t = timegm( 0, 0, 0, 1, 0, 122 );
