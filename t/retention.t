@@ -79,6 +79,27 @@ is_deeply(
     "cleanup two years of backups with default arguments"
 );
 
+push @kept, '2024-01-01';    # one more backup
+is_deeply(
+    [ sort keys $db->retention_hash(@kept)->%* ],
+    [
+        '2023-01-01',        # last yearly (2)
+        '2023-07-01',        # last quarterly (3)
+        '2023-10-01',
+        '2023-12-01',        # last monthly (2)
+        '2023-12-11',        # last weekly (4)
+        '2023-12-18',
+        '2023-12-25',
+        '2023-12-27',        # last daily (6)
+        '2023-12-28',
+        '2023-12-29',
+        '2023-12-30',
+        '2023-12-31',        # Sunday
+        '2024-01-01',        # Monday
+    ],
+    "cleanup previous set after passing the boundary for week, month, quarter and year"
+);
+
 # example from the docs
 is_deeply(
     [
