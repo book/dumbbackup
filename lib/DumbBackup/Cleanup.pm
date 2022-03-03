@@ -57,13 +57,8 @@ my %bucket_fmt = (
     years  => '%Y',
 );
 
-sub call ($self) {
+sub retention_hash ( $self, @backups ) {
     my $options = $self->options;
-    my $today   = strftime "%Y-%m-%d", localtime;
-    my $dest    = "$options->{store}/$today";
-
-    # never delete today's backup
-    my @backups = grep $_ ne $dest, grep -d, glob "$options->{store}/????-??-??";
 
     # separate backups in the corresponding buckets
     my %bucket;
@@ -83,9 +78,23 @@ sub call ($self) {
         $keep{ $bucket{$period}{$_}[0] }++ for @keep;
     }
 
+    return \%keep;
+}
+
+sub call ($self) {
+    my $options = $self->options;
+    my $today   = strftime "%Y-%m-%d", localtime;
+    my $dest    = "$options->{store}/$today";
+
+    # never delete today's backup
+    my @backups = grep $_ ne $dest, grep -d, glob "$options->{store}/????-??-??";
+
+    # compute the retention hash
+    my $keep = $self->retention_hash(@backups);
+
     # remove everything we don't want to keep
     my @local_nice  = $self->local_nice;
-    for my $bye ( grep !$keep{$_}, @backups ) {
+    for my $bye ( grep !$keep->{$_}, @backups ) {
         my @rm = ( @local_nice, rm => '-rf', ( '-v' )x!! $options->{verbose}, $bye);
         $self->run_command(@rm);
     }
