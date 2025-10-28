@@ -92,6 +92,60 @@ sub retention_hash ( $self, @backups ) {
     return \%keep;
 }
 
+sub retention_report ( $self, @backups ) {
+    my $options = $self->options;
+    my $bucket  = _buckets_for(@backups);
+
+    # compte the bucket for each period for all backups
+    my %tag;
+    for my $period (@periods) {
+        for my $name ( keys $bucket->{$period}->%* ) {
+            $tag{$_}{$period} = $name for $bucket->{$period}{$name}->@*;
+        }
+    }
+
+    # compute which backup is kept for every period bucket
+    my %keep;
+    for my $period (@periods) {
+        my @keep = reverse sort keys $bucket->{$period}->%*;
+        splice @keep, $options->{$period};
+        $keep{$period}{ $bucket->{$period}{$_}[0] }++ for @keep;
+    }
+
+    # compute the format for each column of the report
+    my @headers = (
+        "$options->{days} daily",
+        "$options->{weeks} weekly",
+        "$options->{months} monthly",
+        "$options->{quarters} quarterly",
+        "$options->{years} yearly",
+    );
+    my @fmt = map "%-${_}s",
+      map max( 2 + length $tag{ $backups[0] }{ $periods[$_] },
+        length $headers[$_] ), 0 .. $#periods;
+
+    # compute the report header
+    my $report = sprintf ' ' . join( ' | ', @fmt ) . " \n", @headers;
+    $report .= '-'
+      . join( '-+-', map '-' x length( sprintf $fmt[$_], ' ' ), 0 .. $#periods )
+      . "-\n";
+
+    # compute the actual report
+    for my $date ( sort @backups ) {
+        $report .= ' '
+          . join(
+            " | ",
+            map sprintf(
+                $fmt[$_],
+                $tag{$date}{ $periods[$_] }
+                  . ( $keep{ $periods[$_] }{$date} ? ' *' : '  ' )
+            ),
+            0 .. $#periods
+          ) . " \n";
+    }
+    return $report;
+}
+
 sub call ($self) {
     my $options = $self->options;
 
