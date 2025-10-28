@@ -5,7 +5,7 @@ use warnings;
 use File::Spec       qw();
 use POSIX            qw( strftime ceil );
 use Fcntl            qw( :flock );
-use List::Util       qw( min );
+use List::Util       qw( min max );
 use Text::ParseWords qw( shellwords );
 
 use Moo;
@@ -53,43 +53,40 @@ sub BUILD ( $self, $args ) {
         if !$options->{store};
 }
 
+my @periods    = qw( days weeks months quarters years );
 my %bucket_fmt = (
     days     => '%Y-%m-%d',
     weeks    => '%Y-%W',
     months   => '%Y-%m',
-    quarters => '%Y-%Q', # non-standard format!
+    quarters => '%Y-%Q',      # non-standard format!
     years    => '%Y',
 );
 
-sub _buckets_for ($date) {
-    my ( $y, $m, $d ) = $date =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
+# separate dates in the corresponding buckets
+sub _buckets_for (@dates) {
     my %bucket;
-    for my $period ( keys %bucket_fmt ) {
-        my $key = strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
-        $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
-        $bucket{$period} = $key;
+    for my $date ( sort @dates ) {
+        my ( $y, $m, $d ) = $date =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
+        for my $period (@periods) {
+            my $key =
+              strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+            $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
+            push $bucket{$period}{$key}->@*, $date;
+        }
     }
-    return %bucket;
+    return \%bucket;
 }
 
 sub retention_hash ( $self, @backups ) {
     my $options = $self->options;
 
-    # separate backups in the corresponding buckets
-    my %bucket;
-    for my $backup ( sort @backups ) {
-	my @bucket_pairs = _buckets_for( $backup );
-	while( my ($period, $key) = splice @bucket_pairs, 0, 2 ) {
-            push $bucket{$period}{$key}->@*, $backup;
-        }
-    }
-
     # for each period, keep the oldest item in the selected most recent buckets
+    my $bucket = _buckets_for( @backups );
     my %keep;
-    for my $period ( keys %bucket_fmt ) {
-        my @keep = reverse sort keys $bucket{$period}->%*;
+    for my $period ( @periods ) {
+        my @keep = reverse sort keys $bucket->{$period}->%*;
         splice @keep, $options->{$period};
-        $keep{ $bucket{$period}{$_}[0] }++ for @keep;
+        $keep{ $bucket->{$period}{$_}[0] }++ for @keep;
     }
 
     return \%keep;

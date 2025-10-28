@@ -29,6 +29,13 @@ my @bucket_tests = (
         quarters => '2023-1',
         years    => '2023',
     },
+    '2023-12-24' => {
+        days     => '2023-12-24',
+        weeks    => '2023-51',
+        months   => '2023-12',
+        quarters => '2023-4',
+        years    => '2023',
+    },
     '2023-12-31' => {
         days     => '2023-12-31',
         weeks    => '2023-52',
@@ -38,10 +45,16 @@ my @bucket_tests = (
     },
 );
 
+my $expected_buckets;
+my @dates;
 while ( my ( $date, $buckets ) = splice @bucket_tests, 0, 2 ) {
-    is_deeply( { DumbBackup::Cleanup::_buckets_for($date) },
-        $buckets, "buckets for $date" );
+    push @dates, $date;
+    push $expected_buckets->{$_}{ $buckets->{$_} }->@*, $date
+      for keys %$buckets;
 }
+
+is_deeply( DumbBackup::Cleanup::_buckets_for( @dates ),
+    $expected_buckets, '_buckets_for' );
 
 # build 2 years worth of backups starting from 2022-01-01
 my @backups;
