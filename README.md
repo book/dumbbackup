@@ -75,8 +75,11 @@ executable:
 
 * **Few dependencies**
 
-  You need to have `perl` and `rsync` installed. You may also use `nice`
-  and `ionice`, if available.
+  You need to have `perl` (on the machine running the command) and
+  `rsync` (both on the server and target) installed. You may also use
+  `nice` and `ionice`, if available.
+
+  The minimum Perl version required is v5.24 (published in 2016).
 
 * **Easy cleanup**
 
