@@ -22,11 +22,11 @@ with
 sub options_spec {
     qw(
       store=s
-      days|keep-days=i
-      weeks|keep-days=i
-      months|keep-months=i
-      quarters|keep-quarters=i
-      years|keep-years=i
+      days|keep-days|daily=i
+      weeks|keep-weeks|weekly=i
+      months|keep-months|monthly=i
+      quarters|keep-quarters|quarterly=i
+      years|keep-years|yearly=i
       dry_run|dry-run       verbose
       report
       strike|strikeout|stroke
