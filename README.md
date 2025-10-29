@@ -18,6 +18,8 @@ could restore files by copying them back from the archives.
 
 # Installation
 
+This repository provides a fatpacked version of the script.
+
 Just copy the `dumbbackup` file, e.g. in `/usr/local/bin`, and make it
 executable:
 
@@ -42,6 +44,9 @@ executable:
   backup, and having multiple backups of the same version of the same
   file means they all refer to the same location.
 
+  That also implies the backup storage on a server must be on a single
+  filesystem (to take advantage of hard links).
+
 * **Full backups, done in an differential way**
 
   Each backup directory contains a full backup.
@@ -59,6 +64,10 @@ executable:
   > It can copy locally, to/from another host over any remote shell, or
   > to/from a remote rsync daemon.
 
+  The `--server` and `--target` options should accept any host
+  specification that `rsync` accepts. (I've only tested with
+  `ssh`, though.)
+
 * **A single script, all-included**
 
   Although the logic of `dumbbackup` is now split over multiple modules,
@@ -68,6 +77,12 @@ executable:
 
   You need to have `perl` and `rsync` installed. You may also use `nice`
   and `ionice`, if available.
+
+* **Easy cleanup**
+
+  Removing a backup is a easy as running `rm -fr` on it.
+  Thanks to hardlinks, the content of a file is only removed
+  when the last link to it is removed.
 
 # History
 
@@ -91,3 +106,13 @@ executable:
 
   This made it easier to separate the concerns and requirements between
   the `backup` and `cleanup` command.
+
+  The tool is still a single file, thanks to `App::FatPacker`. It is
+  generated with the command `pack-script`.
+
+# See also
+
+`dumbbackup` is not the greatest backup system ever, but it works
+well enough for my simple use case.
+
+[There are many other options available.](https://en.wikipedia.org/wiki/List_of_backup_software#Free_and_open-source_software)
