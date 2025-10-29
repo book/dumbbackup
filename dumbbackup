@@ -424,13 +424,13 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
         store=s                    others!
         server=s                   target=s
         rsync_opts|rsync-opts=s@   exclude=s@
-        dry_run|dry-run
+        dry_run|dry-run            timeout=i
       );
   }
   
   sub options_defaults {
       (
-          timeout => 60,
+          timeout => 600,
       );
   }
   
@@ -643,7 +643,6 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   }
   
   1;
-  
 DUMBBACKUP_CLEANUP
 
 $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND';

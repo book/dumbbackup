@@ -30,13 +30,13 @@ sub options_spec {
       store=s                    others!
       server=s                   target=s
       rsync_opts|rsync-opts=s@   exclude=s@
-      dry_run|dry-run
+      dry_run|dry-run            timeout=i
     );
 }
 
 sub options_defaults {
     (
-        timeout => 60,
+        timeout => 600,
     );
 }
 
