@@ -4,6 +4,7 @@ use warnings;
 
 use String::ShellQuote qw( shell_quote );
 use Getopt::Long ();
+use Module::Runtime qw( use_module );
 
 use Moo::Role;
 use namespace::clean;
@@ -25,7 +26,7 @@ has options => (
         #$parser->configure( );
         my $passed =
           $parser->getoptionsfromarray( $self->arguments, \%options,
-            $self->options_spec );
+            help => $self->options_spec );
         die "Error in command line arguments\n" if !$passed;
         \%options;
     },
@@ -42,6 +43,13 @@ sub module_for_command ( $self, $command ) {
     };
     return $module_for_command->{$command} // '';
 }
+
+# short-circuit the --help option
+around call => sub ( $orig, $self, @args ) {
+    $self->options->{help}
+      ? use_module('DumbBackup::Help')->new->show_help_for( ref $self )
+      : $orig->( $self, @args );
+};
 
 # a wrapper around system
 sub run_command ($self, @cmd ) {
@@ -72,6 +80,7 @@ sub run_command ($self, @cmd ) {
 requires
   'options_spec',
   'options_defaults',
+  'call',
   ;
 
 1;

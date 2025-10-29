@@ -53,7 +53,7 @@ sub options_defaults {
 sub BUILD ( $self, $args ) {
     my $options = $self->options;
     die "--store is required\n"
-        if !$options->{store};
+        if !$options->{store} && !$options->{help};
 }
 
 my @periods    = qw( days weeks months quarters years );

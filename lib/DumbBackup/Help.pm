@@ -18,6 +18,14 @@ with
 sub options_spec     { }
 sub options_defaults { }
 
+sub show_help_for ($self, $class) {
+    my $module = Module::Reader->new->module($class);
+    pod2usage(
+        -verbose => 2,
+        -input   => $module->handle,
+    );
+}
+
 sub call ( $self ) {
     my $options = $self->options;
     my $command = shift $self->arguments->@*;
@@ -25,11 +33,7 @@ sub call ( $self ) {
     die "Unknown subcommand '$command'\n"
       unless $class;
 
-    my $module = Module::Reader->new->module($class);
-    pod2usage(
-        -verbose => 2,
-        -input   => $module->handle,
-    );
+    $self->show_help_for($class);
 }
 
 1;
@@ -43,6 +47,8 @@ dumbackup help - Get help on dumbbackup
 =head1 SYNOPSIS
 
   dumbbackup help <command>
+
+  dumbbackup <command> --help
 
 =head1 DESCRIPTION
 
