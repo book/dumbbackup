@@ -81,16 +81,15 @@ sub _buckets_for (@dates) {
 
 sub retention_hash ( $self, @backups ) {
     my $options = $self->options;
-
-    # for each period, keep the oldest item in the selected most recent buckets
-    my $bucket = _buckets_for( @backups );
+    my $bucket  = _buckets_for(@backups);
     my %keep;
-    for my $period ( @periods ) {
-        my @keep = reverse sort keys $bucket->{$period}->%*;
-        splice @keep, $options->{$period};
-        $keep{ $bucket->{$period}{$_}[-1] }++ for @keep;
+    for my $period (@periods) {    # for a given periodicity
+        my @keep = reverse sort keys $bucket->{$period}->%*;  # grab all buckets
+        splice @keep, $options->{$period} # keep the requested number of buckets
+          if $options->{$period} >= 0;    # if any (negative means keep all)
+        $keep{ $bucket->{$period}{$_}[-1] }++   # then keep the most recent item
+          for @keep;                            # in each remaining bucket
     }
-
     return \%keep;
 }
 
@@ -110,7 +109,8 @@ sub retention_report ( $self, @backups ) {
     my %keep;
     for my $period (@periods) {
         my @keep = reverse sort keys $bucket->{$period}->%*;
-        splice @keep, $options->{$period};
+        splice @keep, $options->{$period}
+          if $options->{$period} >= 0;    # -1 means keep all
         $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
     }
 
