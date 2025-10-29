@@ -118,10 +118,10 @@ is_deeply(
 is_deeply(
     [
         sort keys $db->retention_hash(
-            '2019-12-02',    # drop
+            '2019-12-02',    # last yearly
             '2020-01-07',    # drop
             '2020-02-19',    # last quarterly
-            '2020-05-17',    # last yearly
+            '2020-05-17',
             '2021-07-08',    # last weekly
             '2021-09-14',
             '2022-01-19',    # last daily
@@ -134,6 +134,7 @@ is_deeply(
         )->%*
     ],
     [
+        '2019-12-02',
         '2020-02-19',
         '2020-05-17',
         '2021-07-08',

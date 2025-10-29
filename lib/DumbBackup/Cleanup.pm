@@ -38,14 +38,14 @@ sub options_spec {
 # - weeks:    a month is 5 weeks (at most) => keep 5
 # - months:   a quarter is 3 months        => keep 3
 # - quarters: a year is 4 quarters         => keep 4
-# - years:    keep 3, the current one and the two preceding ones
+# - years:    keep 10, but could be anything
 sub options_defaults {
     (
         days     => 7,
         weeks    => 5,
         months   => 3,
         quarters => 4,
-        years    => 3,
+        years    => 10,
     );
 }
 
