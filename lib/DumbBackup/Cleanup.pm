@@ -32,18 +32,18 @@ sub options_spec {
 }
 
 # default to keep is enough of one periodicity to cover the enclosing periodicity
-# - days:     a week  is 7 seven days      => keep 6
-# - weeks:    a month is 5 weeks (at most) => keep 4
-# - months:   a quarter is 3 months        => keep 2
-# - quarters: a year is 4 quarters         => keep 3
-# - years:    keep 2, the current one and the previous one
+# - days:     a week  is 7 seven days      => keep 7
+# - weeks:    a month is 5 weeks (at most) => keep 5
+# - months:   a quarter is 3 months        => keep 3
+# - quarters: a year is 4 quarters         => keep 4
+# - years:    keep 3, the current one and the two preceding ones
 sub options_defaults {
     (
-        days     => 6,
-        weeks    => 4,
-        months   => 2,
-        quarters => 3,
-        years    => 2,
+        days     => 7,
+        weeks    => 5,
+        months   => 3,
+        quarters => 4,
+        years    => 3,
     );
 }
 
@@ -55,10 +55,10 @@ sub BUILD ( $self, $args ) {
 
 my @periods    = qw( days weeks months quarters years );
 my %bucket_fmt = (
-    days     => '%Y-%m-%d',
-    weeks    => '%Y-%W',
+    days     => '%Y-%m-%d %a',
+    weeks    => '%Y-%W',         # week starts on Monday
     months   => '%Y-%m',
-    quarters => '%Y-%Q',      # non-standard format!
+    quarters => '%Y-%Q',         # non-standard format!
     years    => '%Y',
 );
 
