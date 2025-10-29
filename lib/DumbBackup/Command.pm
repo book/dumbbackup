@@ -31,6 +31,18 @@ has options => (
     },
 );
 
+sub module_for_command ( $self, $command ) {
+    state $module_for_command = {
+        backup  => 'DumbBackup::Backup',
+        run     => 'DumbBackup::Backup',
+        now     => 'DumbBackup::Backup',
+        cleanup => 'DumbBackup::Cleanup',
+        keep    => 'DumbBackup::Cleanup',
+        help    => 'DumbBackup::Help',
+    };
+    return $module_for_command->{$command} // '';
+}
+
 # a wrapper around system
 sub run_command ($self, @cmd ) {
     say "# ", shell_quote(@cmd)
