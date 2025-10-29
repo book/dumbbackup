@@ -88,7 +88,7 @@ sub retention_hash ( $self, @backups ) {
     for my $period ( @periods ) {
         my @keep = reverse sort keys $bucket->{$period}->%*;
         splice @keep, $options->{$period};
-        $keep{ $bucket->{$period}{$_}[0] }++ for @keep;
+        $keep{ $bucket->{$period}{$_}[-1] }++ for @keep;
     }
 
     return \%keep;
@@ -111,7 +111,7 @@ sub retention_report ( $self, @backups ) {
     for my $period (@periods) {
         my @keep = reverse sort keys $bucket->{$period}->%*;
         splice @keep, $options->{$period};
-        $keep{$period}{ $bucket->{$period}{$_}[0] }++ for @keep;
+        $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
     }
 
     # compute the format for each column of the report
