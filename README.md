@@ -51,7 +51,7 @@ executable:
 
   Each backup directory contains a full backup.
 
-  Thanks to hardlinks, multiple copies of the same file acrosse multiple
+  Thanks to hardlinks, multiple copies of the same file across multiple
   backups only use the space once.
 
   Thanks to `rsync`, the data transfered for backing up an unmodified
@@ -108,10 +108,26 @@ executable:
   split it into several subcommands started by the same frontend.
 
   This made it easier to separate the concerns and requirements between
-  the `backup` and `cleanup` command.
+  the `backup` and `cleanup` commands.
 
-  The tool is still a single file, thanks to `App::FatPacker`. It is
-  generated with the command `pack-script`.
+  The tool is still a single file, thanks to
+  `[App::FatPacker](https://metacpan.org/pod/App::FatPacker)`.
+  It is generated with the command `pack-script`.
+
+* March 2022
+
+  Added a quarterly bucket to the retention strategy.
+
+* July 2022
+
+  Started documenting the retention policy, and wrote some
+  crude script to visualize it.
+
+* October 2025
+
+  Finished including the retention policy in `dumbbackup cleanup`,
+  and polished the visualization into a report, that became the
+  output of `dumbbackup cleanup --report`.
 
 # See also
 
