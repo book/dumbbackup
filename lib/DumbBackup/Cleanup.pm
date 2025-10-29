@@ -28,6 +28,8 @@ sub options_spec {
       quarters|keep-quarters=i
       years|keep-years=i
       dry_run|dry-run       verbose
+      report
+      strike|strikeout|stroke
     );
 }
 
@@ -149,14 +151,24 @@ sub retention_report ( $self, @backups ) {
 sub call ($self) {
     my $options = $self->options;
 
-    # compute the retention hash
+    # compute the list of backups
     my @backups = grep -d, glob "$options->{store}/????-??-??";
-    my $keep    = $self->retention_hash(@backups);
+
+    # print a report if asked for one
+    if ( $options->{report} ) {
+        my $report = $self->retention_report(@backups);
+        $report =~ s/^([^*y+]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+          if $options->{strike};    # COMBINING LONG STROKE OVERLAY
+        binmode( STDOUT, ':utf8' );
+        print $report;
+        return;                     # don't do anything else
+    }
 
     # remove everything we don't want to keep
-    my @local_nice  = $self->local_nice;
+    my $keep       = $self->retention_hash(@backups);
+    my @local_nice = $self->local_nice;
     for my $bye ( grep !$keep->{$_}, @backups ) {
-        my @rm = ( @local_nice, rm => '-rf', ( '-v' )x!! $options->{verbose}, $bye);
+        my @rm = ( @local_nice, rm => '-rf', ('-v')x!! $options->{verbose}, $bye );
         $self->run_command(@rm);
     }
 
