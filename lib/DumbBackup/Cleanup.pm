@@ -145,6 +145,11 @@ sub retention_report ( $self, @backups ) {
             0 .. $#periods
           ) . " \n";
     }
+
+    # strike backups to be removed with COMBINING LONG STROKE OVERLAY
+    $report =~ s/^([^*y+]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+      if $options->{strike};
+
     return $report;
 }
 
@@ -157,9 +162,7 @@ sub call ($self) {
     # print a report if asked for one
     if ( $options->{report} ) {
         my $report = $self->retention_report(@backups);
-        $report =~ s/^([^*y+]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
-          if $options->{strike};    # COMBINING LONG STROKE OVERLAY
-        binmode( STDOUT, ':utf8' );
+        binmode( STDOUT, ':utf8' ) if $options->{strike};
         print $report;
         return;                     # don't do anything else
     }
