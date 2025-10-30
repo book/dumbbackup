@@ -87,6 +87,18 @@ executable:
   Thanks to hardlinks, the content of a file is only removed
   when the last link to it is removed.
 
+  `dumbbackup cleanup` makes it even easier by generating the
+  relevant removal commands, according to the retention policy.
+
+* **Separation of concerns**
+
+  The `dumbbackup run` and the `dumbbackup clean` commands are completely
+  independent:
+
+  * if the cleanup step is not run, backups will accumulate;
+  * if the backup step is not run, older backup won't disappear as
+    they age.
+
 # History
 
 * October 2013
