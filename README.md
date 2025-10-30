@@ -99,6 +99,320 @@ executable:
   * if the backup step is not run, older backup won't disappear as
     they age.
 
+# Usage
+
+## Backup
+
+To backup a host (named `zlonk` in the server's `/root/.ssh/config`)
+into the server in the `/backups/zlonk` directory, simply run:
+
+    dumbbackup                    \
+        --target root@zlonk       \
+        --store /backups/zlonk    \
+        -- /
+
+The backup granularity is daily, which means each backup is stored in
+a directory named after the local date of the host that ran the
+command, in the `strftime` format `%Y-%m-%d` (or `YYYY-MM-DD` for
+regular people).
+
+Running the tool several times a day will overwrite files with a more
+recent version (and not delete any by default). It also help ensure that
+if a backup failed (e.g. network failure), the next run will catch
+anything that was missed in the previous run.
+
+### Unattended backups and security
+
+To enable unattended backups (the best kind of backups), you'll need to
+have a passwordless private key for ssh. Obviously, this should be a key
+pair dedicated for backups, so that it can easily be revoked (by
+removing it from the host `rsync` is connecting to).
+
+Because these are passwordless keys, I'd recommend that you initiate all
+backups from the server (so has to keep the private key on the server,
+instead of spreading passwordless keys to your backup server on all
+the targets...).
+
+It's possible to increase security by only allowing the `rsync`
+command to be run using that key pair. This is done by adding
+a line like the following to the `.ssh/authorized_keys` file:
+
+    command="/usr/bin/rsync" ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... root@server
+
+## Backup retention policy
+
+The `dumbbackup cleanup` (alias `dumbbackup keep`) command, run on
+the storage server, will remove older backups according to the defined
+retention policy.
+
+### Bucketing
+
+For backup retention, `dumbbackup` categorizes backups into "buckets"
+of different types.  There are daily, weekly, monthly, quarterly and
+yearly buckets.
+
+When considering which backups to remove, `dumbbackup clean` marks
+the oldest item in the most recent buckets for each periodicity type.
+Anything that is not marked to be kept at the end of the process is
+removed.
+
+The retention strategy can be seen as passing the backups through sieves
+with openings of different sizes. There a sieve for each periodicity,
+which will only keep the oldest backups in each bucket for the given
+periodicity.
+
+The retention policy is expressed in number of items to retain per
+periodicity. For example, if the retention is of 2 yearly backups, the
+backups will be distributed in yearly buckets, and only the most recent
+backup in the 2 most recent yearly buckets will be kept.
+
+Taking the backup for `2013-10-24` as an example, it belongs to the
+following buckets of each type:
+
+* daily: `2013-10-24` (October 24th, 2013)
+* weekly: `2013-42` (week 42 of 2013)
+* monthly: `2013-10` (October 2013)
+* quartely: `2013-3` (third quarter of 2013)
+* yearly: `2013`
+
+For the weekly bucket, `dumbbackup` uses the `strftime` format `%W`:
+range 00 to 53, starting with the first Monday of the year as the first
+day of week 01).
+
+This can lead to some quirks: for example, 2024-12-31 (Tuesday) is in
+the same week as 2025-01-01 (Wednesday), but the former will be in the
+weekly bucket `2024-53` and the latter in the `2025-00` bucket.
+
+The default retention for each periodicity is:
+
+* 7 daily backups
+* 5 weekly backups
+* 3 monthly backups
+* 4 quarterly backups
+* 10 yearly backups
+
+That is to say, enough daily backups to cover a week, enough weekly
+backups to cover a month, enough monthly backups to cover a quarter,
+and enough quartely backups to cover a year.
+
+This retention policy would be expressed as follows (if that wasn't
+the default):
+
+    dumbbackup keep      \
+        --days      7    \
+        --weeks     5    \
+        --months    3    \
+        --quarters  4    \
+        --years    10    \
+        --store   ...
+
+This ensures that even if backups are skipped, we keep a spread of
+backups that is denser when closer to the present day.
+
+### Example
+
+Assuming the following backups have been saved for a given host:
+
+    2019-10-11 2019-11-13 2019-11-28 2019-11-29 2019-12-02 2020-01-07
+    2020-02-01 2020-02-19 2020-03-09 2020-04-01 2020-05-01 2020-06-08
+    2020-06-09 2020-08-27 2020-08-28 2020-08-31 2020-09-14 2021-01-01
+    2021-07-01 2021-08-01 2021-09-01 2021-10-01 2021-11-01 2021-12-01
+    2021-12-28 2021-12-31 2022-01-01 2022-01-08 2022-01-09 2022-01-10
+    2022-01-11 2022-01-12 2022-01-13 2022-01-14
+
+Using the default retention policy, one can run the following command:
+
+    dumbbackup keep --store /backups/zlonk --report
+
+to produce a table of all the backups that exist for a given target
+and their corresponding buckets:
+
+```
+ 7 daily          | 5 weekly  | 3 monthly | 4 quarterly | 10 yearly 
+------------------+-----------+-----------+-------------+-----------
+ 2019-10-11 Fri   | 2019-40   | 2019-10   | 2019-4      | 2019      
+ 2019-11-13 Wed   | 2019-45   | 2019-11   | 2019-4      | 2019      
+ 2019-11-28 Thu   | 2019-47   | 2019-11   | 2019-4      | 2019      
+ 2019-11-29 Fri   | 2019-47   | 2019-11   | 2019-4      | 2019      
+ 2019-12-02 Mon   | 2019-48   | 2019-12   | 2019-4      | 2019 *    
+ 2020-01-07 Tue   | 2020-01   | 2020-01   | 2020-1      | 2020      
+ 2020-02-01 Sat   | 2020-04   | 2020-02   | 2020-1      | 2020      
+ 2020-02-19 Wed   | 2020-07   | 2020-02   | 2020-1      | 2020      
+ 2020-03-09 Mon   | 2020-10   | 2020-03   | 2020-1      | 2020      
+ 2020-04-01 Wed   | 2020-13   | 2020-04   | 2020-2      | 2020      
+ 2020-05-01 Fri   | 2020-17   | 2020-05   | 2020-2      | 2020      
+ 2020-06-08 Mon   | 2020-23   | 2020-06   | 2020-2      | 2020      
+ 2020-06-09 Tue   | 2020-23   | 2020-06   | 2020-2      | 2020      
+ 2020-08-27 Thu   | 2020-34   | 2020-08   | 2020-3      | 2020      
+ 2020-08-28 Fri   | 2020-34   | 2020-08   | 2020-3      | 2020      
+ 2020-08-31 Mon   | 2020-35   | 2020-08   | 2020-3      | 2020      
+ 2020-09-14 Mon   | 2020-37   | 2020-09   | 2020-3      | 2020 *    
+ 2021-01-01 Fri   | 2021-00   | 2021-01   | 2021-1 *    | 2021      
+ 2021-07-01 Thu   | 2021-26   | 2021-07   | 2021-3      | 2021      
+ 2021-08-01 Sun   | 2021-30   | 2021-08   | 2021-3      | 2021      
+ 2021-09-01 Wed   | 2021-35   | 2021-09   | 2021-3 *    | 2021      
+ 2021-10-01 Fri   | 2021-39   | 2021-10   | 2021-4      | 2021      
+ 2021-11-01 Mon   | 2021-44   | 2021-11 * | 2021-4      | 2021      
+ 2021-12-01 Wed   | 2021-48 * | 2021-12   | 2021-4      | 2021      
+ 2021-12-28 Tue   | 2021-52   | 2021-12   | 2021-4      | 2021      
+ 2021-12-31 Fri   | 2021-52 * | 2021-12 * | 2021-4 *    | 2021 *    
+ 2022-01-01 Sat   | 2022-00 * | 2022-01   | 2022-1      | 2022      
+ 2022-01-08 Sat * | 2022-01   | 2022-01   | 2022-1      | 2022      
+ 2022-01-09 Sun * | 2022-01 * | 2022-01   | 2022-1      | 2022      
+ 2022-01-10 Mon * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-11 Tue * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-12 Wed * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-13 Thu * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-14 Fri * | 2022-02 * | 2022-01 * | 2022-1 *    | 2022 *    
+```
+
+The backups to be *kept* are marked with a `*` in the above table.
+Anything not marked as retained is going to be deleted.
+
+The actual deletions can be verified with:
+
+```
+$ dumbbackup --store /backups/zlonk --dry-run
+# rm -rf 2019-10-11
+# rm -rf 2019-11-13
+# rm -rf 2019-11-28
+# rm -rf 2019-11-29
+# rm -rf 2020-01-07
+# rm -rf 2020-02-01
+# rm -rf 2020-02-19
+# rm -rf 2020-03-09
+# rm -rf 2020-04-01
+# rm -rf 2020-05-01
+# rm -rf 2020-06-08
+# rm -rf 2020-06-09
+# rm -rf 2020-08-27
+# rm -rf 2020-08-28
+# rm -rf 2020-08-31
+# rm -rf 2021-07-01
+# rm -rf 2021-08-01
+# rm -rf 2021-10-01
+# rm -rf 2021-12-28
+```
+
+After running `dumbackup cleanup` for real, the remaining backups are:
+
+```
+ 7 daily          | 5 weekly  | 3 monthly | 4 quarterly | 10 yearly 
+------------------+-----------+-----------+-------------+-----------
+ 2019-12-02 Mon   | 2019-48   | 2019-12   | 2019-4      | 2019 *    
+ 2020-09-14 Mon   | 2020-37   | 2020-09   | 2020-3      | 2020 *    
+ 2021-01-01 Fri   | 2021-00   | 2021-01   | 2021-1 *    | 2021      
+ 2021-09-01 Wed   | 2021-35   | 2021-09   | 2021-3 *    | 2021      
+ 2021-11-01 Mon   | 2021-44   | 2021-11 * | 2021-4      | 2021      
+ 2021-12-01 Wed   | 2021-48 * | 2021-12   | 2021-4      | 2021      
+ 2021-12-31 Fri   | 2021-52 * | 2021-12 * | 2021-4 *    | 2021 *    
+ 2022-01-01 Sat   | 2022-00 * | 2022-01   | 2022-1      | 2022      
+ 2022-01-08 Sat * | 2022-01   | 2022-01   | 2022-1      | 2022      
+ 2022-01-09 Sun * | 2022-01 * | 2022-01   | 2022-1      | 2022      
+ 2022-01-10 Mon * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-11 Tue * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-12 Wed * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-13 Thu * | 2022-02   | 2022-01   | 2022-1      | 2022      
+ 2022-01-14 Fri * | 2022-02 * | 2022-01 * | 2022-1 *    | 2022 *    
+```
+
+When the year rolls over on January 1st, it creates new daily, weekly,
+monthly, quarterly and yearly buckets, which push over the "last" item
+for each bucket type.
+
+### Picking a retention policy
+
+When coming up with your own retention policy, it is important to make
+sure that the number of kept items for a given periodicity covers a span
+of time larger than what is covered by the periodicity before it.
+
+For example, if we keep 12 monthly backups, any number of quarterly
+backups that covers less than 12 months will gain nothing, in terms
+of going back in time:
+
+```
+ 7 daily          | 5 weekly  | 12 monthly | 4 quarterly | 10 yearly 
+------------------+-----------+------------+-------------+-----------
+ 2024-01-31 Wed   | 2024-05   | 2024-01 *  | 2024-1      | 2024      
+ 2024-02-29 Thu   | 2024-09   | 2024-02 *  | 2024-1      | 2024      
+ 2024-03-31 Sun   | 2024-13   | 2024-03 *  | 2024-1 *    | 2024      
+ 2024-04-30 Tue   | 2024-18   | 2024-04 *  | 2024-2      | 2024      
+ 2024-05-31 Fri   | 2024-22   | 2024-05 *  | 2024-2      | 2024      
+ 2024-06-30 Sun   | 2024-26   | 2024-06 *  | 2024-2 *    | 2024      
+ 2024-07-31 Wed   | 2024-31   | 2024-07 *  | 2024-3      | 2024      
+ 2024-08-31 Sat   | 2024-35   | 2024-08 *  | 2024-3      | 2024      
+ 2024-09-30 Mon   | 2024-40   | 2024-09 *  | 2024-3 *    | 2024      
+ 2024-10-31 Thu   | 2024-44   | 2024-10 *  | 2024-4      | 2024      
+ 2024-11-30 Sat   | 2024-48   | 2024-11 *  | 2024-4      | 2024      
+ 2024-12-08 Sun   | 2024-49 * | 2024-12    | 2024-4      | 2024      
+ 2024-12-15 Sun   | 2024-50 * | 2024-12    | 2024-4      | 2024      
+ 2024-12-22 Sun   | 2024-51 * | 2024-12    | 2024-4      | 2024      
+ 2024-12-25 Wed * | 2024-52   | 2024-12    | 2024-4      | 2024      
+ 2024-12-26 Thu * | 2024-52   | 2024-12    | 2024-4      | 2024      
+ 2024-12-27 Fri * | 2024-52   | 2024-12    | 2024-4      | 2024      
+ 2024-12-28 Sat * | 2024-52   | 2024-12    | 2024-4      | 2024      
+ 2024-12-29 Sun * | 2024-52 * | 2024-12    | 2024-4      | 2024      
+ 2024-12-30 Mon * | 2024-53   | 2024-12    | 2024-4      | 2024      
+ 2024-12-31 Tue * | 2024-53 * | 2024-12 *  | 2024-4 *    | 2024 *    
+```
+
+For quarterly backups to make sense in this setup, the number of
+quarterly backups kept needs to be at least 5.
+
+Note that the options defining the retention strategy also accept
+`0` (do not try to keep any backup for this periodicity) and `-1`
+(keep an unlimited number of backups for that periodicity).
+
+### Backup spread
+
+With the above strategy (ignoring the yearly backups), if we create new
+backups every day and apply the retention policy daily, the number of
+kept backups will oscillate between 12 and 16.
+
+The widest spread for backups (16) would be similar to:
+
+```
+ 7 daily          | 5 weekly  | 3 monthly | 4 quarterly | 0 yearly 
+------------------+-----------+-----------+-------------+----------
+ 2024-06-30 Sun   | 2024-26   | 2024-06   | 2024-2 *    | 2024     
+ 2024-09-30 Mon   | 2024-40   | 2024-09   | 2024-3 *    | 2024     
+ 2024-12-31 Tue   | 2024-53   | 2024-12   | 2024-4 *    | 2024     
+ 2025-01-31 Fri   | 2025-04   | 2025-01 * | 2025-1      | 2025     
+ 2025-02-09 Sun   | 2025-05 * | 2025-02   | 2025-1      | 2025     
+ 2025-02-16 Sun   | 2025-06 * | 2025-02   | 2025-1      | 2025     
+ 2025-02-23 Sun   | 2025-07 * | 2025-02   | 2025-1      | 2025     
+ 2025-02-28 Fri   | 2025-08   | 2025-02 * | 2025-1      | 2025     
+ 2025-03-02 Sun   | 2025-08 * | 2025-03   | 2025-1      | 2025     
+ 2025-03-03 Mon * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-04 Tue * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-05 Wed * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-06 Thu * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-07 Fri * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-08 Sat * | 2025-09   | 2025-03   | 2025-1      | 2025     
+ 2025-03-09 Sun * | 2025-09 * | 2025-03 * | 2025-1 *    | 2025     
+```
+
+While the tighest spread of backups (12) would look like this:
+
+```
+ 7 daily          | 5 weekly  | 3 monthly | 4 quarterly | 0 yearly 
+------------------+-----------+-----------+-------------+----------
+ 2024-06-30 Sun   | 2024-26   | 2024-06   | 2024-2 *    | 2024     
+ 2024-09-30 Mon   | 2024-40   | 2024-09   | 2024-3 *    | 2024     
+ 2024-11-30 Sat   | 2024-48   | 2024-11 * | 2024-4      | 2024     
+ 2024-12-15 Sun   | 2024-50 * | 2024-12   | 2024-4      | 2024     
+ 2024-12-22 Sun   | 2024-51 * | 2024-12   | 2024-4      | 2024     
+ 2024-12-26 Thu * | 2024-52   | 2024-12   | 2024-4      | 2024     
+ 2024-12-27 Fri * | 2024-52   | 2024-12   | 2024-4      | 2024     
+ 2024-12-28 Sat * | 2024-52   | 2024-12   | 2024-4      | 2024     
+ 2024-12-29 Sun * | 2024-52 * | 2024-12   | 2024-4      | 2024     
+ 2024-12-30 Mon * | 2024-53   | 2024-12   | 2024-4      | 2024     
+ 2024-12-31 Tue * | 2024-53 * | 2024-12 * | 2024-4 *    | 2024     
+ 2025-01-02 Thu * | 2025-00 * | 2025-01 * | 2025-1 *    | 2025     
+```
+
+(Note that `2024-53` and `2025-00` are actually the same week, as discussed earlier.)
+
 # History
 
 * October 2013
