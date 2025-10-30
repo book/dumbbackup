@@ -123,7 +123,7 @@ sub retention_report ( $self, @backups ) {
         "$options->{years} yearly",
     );
     my @fmt = map "%-${_}s",
-      map max( 2 + length $tag{ $backups[0] }{ $periods[$_] },
+      map max( 2 + length( $tag{ $backups[0] // '' }{ $periods[$_] } // '' ),
         length $headers[$_] ), 0 .. $#periods;
 
     # compute the report header
