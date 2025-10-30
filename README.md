@@ -14,7 +14,7 @@ Not having any backups, I wasn't feeling very safe about my data.
 So I decided to go with a very simple strategy: back everything up with
 `rsync` *now* on my remote server (and later, NAS) so nothing horribly
 catastrophic and unrecoverable would happen to my data. Worst case, I
-could restore files by copying them back from the archives.
+could restore files by copying them back manually from the archives.
 
 # Installation
 
@@ -37,7 +37,7 @@ executable:
 
 * **Some data deduplication**
 
-  `dumbbackup` is not [bup](https://bup.github.io/).
+  **dumbbackup** is not [bup](https://bup.github.io/).
 
   The only data deduplication it offers is by hard-linking identicals
   versions of the same file. That means each backup directory is a full
@@ -70,8 +70,9 @@ executable:
 
 * **A single script, all-included**
 
-  Although the logic of `dumbbackup` is now split over multiple modules,
-  you only have one script to download and install to use it.
+  Although the program logic is now split over multiple modules, you
+  only have one script (`dumbbackup`)  to download and install to be
+  able to use it.
 
 * **Few dependencies**
 
@@ -83,12 +84,13 @@ executable:
 
 * **Easy cleanup**
 
-  Removing a backup is a easy as running `rm -fr` on it.
+  Removing a backup is a easy as running `rm -rf` on it.
   Thanks to hardlinks, the content of a file is only removed
   when the last link to it is removed.
 
-  `dumbbackup cleanup` makes it even easier by generating the
-  relevant removal commands, according to the retention policy.
+  `dumbbackup cleanup` makes it even easier by generating
+  the relevant removal commands, according to the
+  [retention policy](#backup-retention-policy).
 
 * **Separation of concerns**
 
@@ -116,17 +118,17 @@ a directory named after the local date of the host that ran the
 command, in the `strftime` format `%Y-%m-%d` (or `YYYY-MM-DD` for
 regular people).
 
-Running the tool several times a day will overwrite files with a more
-recent version (and not delete any by default). It also help ensure that
-if a backup failed (e.g. network failure), the next run will catch
-anything that was missed in the previous run.
+Running the tool several times a day will overwrite files that have been
+updated (and not delete any by default). It also help ensure that if a
+backup failed (e.g. network failure), the next run will catch anything
+that was missed in the previous run.
 
 ### Unattended backups and security
 
-To enable unattended backups (the best kind of backups), you'll need to
-have a passwordless private key for ssh. Obviously, this should be a key
-pair dedicated for backups, so that it can easily be revoked (by
-removing it from the host `rsync` is connecting to).
+To enable unattended backups (the best kind of backups), you'll need
+to have a passwordless private key for `ssh`. Obviously, this should
+be a key pair dedicated for backups, so that it can easily be revoked
+(by removing it from the host `rsync` is connecting to).
 
 Because these are passwordless keys, I'd recommend that you initiate all
 backups from the server (so has to keep the private key on the server,
@@ -141,33 +143,33 @@ a line like the following to the `.ssh/authorized_keys` file:
 
 ## Backup retention policy
 
-The `dumbbackup cleanup` (alias `dumbbackup keep`) command, run on
+The `dumbbackup cleanup` (aliases to `dumbbackup keep`) command, run on
 the storage server, will remove older backups according to the defined
 retention policy.
 
 ### Bucketing
 
-For backup retention, `dumbbackup` categorizes backups into "buckets"
-of different types.  There are daily, weekly, monthly, quarterly and
-yearly buckets.
+For backup retention, backups are categorized into "buckets" of different
+types. There are daily, weekly, monthly, quarterly and yearly buckets.
 
-When considering which backups to remove, `dumbbackup clean` marks
-the oldest item in the most recent buckets for each periodicity type.
+When considering which backups to remove, `dumbbackup clean` marks the
+most recent item in the most recent buckets for each periodicity type.
 Anything that is not marked to be kept at the end of the process is
-removed.
+eligible to be removed.
 
 The retention strategy can be seen as passing the backups through sieves
 with openings of different sizes. There a sieve for each periodicity,
-which will only keep the oldest backups in each bucket for the given
+which will only keep the most recent backup in each bucket for the given
 periodicity.
 
 The retention policy is expressed in number of items to retain per
-periodicity. For example, if the retention is of 2 yearly backups, the
-backups will be distributed in yearly buckets, and only the most recent
-backup in the 2 most recent yearly buckets will be kept.
+periodicity. For example, if the retention is of 6 monthly backups,
+the backups will be distributed in monthly buckets, and only the most
+recent backup in each of the 6 most recent monthly buckets will be marked
+for keeping.
 
 Taking the backup for `2013-10-24` as an example, it belongs to the
-following buckets of each type:
+following buckets for each periodicity:
 
 * daily: `2013-10-24` (October 24th, 2013)
 * weekly: `2013-42` (week 42 of 2013)
@@ -175,13 +177,13 @@ following buckets of each type:
 * quartely: `2013-3` (third quarter of 2013)
 * yearly: `2013`
 
-For the weekly bucket, `dumbbackup` uses the `strftime` format `%W`:
-range 00 to 53, starting with the first Monday of the year as the first
-day of week 01).
+For the weekly bucket, **dumbbackup** uses the `strftime` format `%W`:
+range `00` to `53`, starting with the first Monday of the year as the
+first day of week `01`).
 
-This can lead to some quirks: for example, 2024-12-31 (Tuesday) is in
-the same week as 2025-01-01 (Wednesday), but the former will be in the
-weekly bucket `2024-53` and the latter in the `2025-00` bucket.
+This can lead to some quirks: for example, `2024-12-31` (Tuesday) is
+in the same week as `2025-01-01` (Wednesday), but the former will be in
+the weekly bucket `2024-53` and the latter in the `2025-00` bucket.
 
 The default retention for each periodicity is:
 
@@ -193,7 +195,9 @@ The default retention for each periodicity is:
 
 That is to say, enough daily backups to cover a week, enough weekly
 backups to cover a month, enough monthly backups to cover a quarter,
-and enough quartely backups to cover a year.
+and enough quartely backups to cover a year. And then 10 years, but
+that could be anything (disk space will expand faster and cheaper
+than what's needed for an extra backup per year).
 
 This retention policy would be expressed as follows (if that wasn't
 the default):
@@ -211,7 +215,8 @@ backups that is denser when closer to the present day.
 
 ### Example
 
-Assuming the following backups have been saved for a given host:
+Assuming the following backups have been saved for a given host,
+and none have been cleaned up yet:
 
     2019-10-11 2019-11-13 2019-11-28 2019-11-29 2019-12-02 2020-01-07
     2020-02-01 2020-02-19 2020-03-09 2020-04-01 2020-05-01 2020-06-08
@@ -267,7 +272,8 @@ and their corresponding buckets:
 ```
 
 The backups to be *kept* are marked with a `*` in the above table.
-Anything not marked as retained is going to be deleted.
+Anything not marked as retained is going to be deleted when we runr
+the actual command.
 
 The actual deletions can be verified with:
 
@@ -317,14 +323,14 @@ After running `dumbackup cleanup` for real, the remaining backups are:
 ```
 
 When the year rolls over on January 1st, it creates new daily, weekly,
-monthly, quarterly and yearly buckets, which push over the "last" item
-for each bucket type.
+monthly, quarterly and yearly buckets, which will push out the oldest
+item in each bucket type.
 
 ### Picking a retention policy
 
 When coming up with your own retention policy, it is important to make
 sure that the number of kept items for a given periodicity covers a span
-of time larger than what is covered by the periodicity before it.
+of time larger than what is covered by the periodicity below it.
 
 For example, if we keep 12 monthly backups, any number of quarterly
 backups that covers less than 12 months will gain nothing, in terms
@@ -365,9 +371,9 @@ Note that the options defining the retention strategy also accept
 
 ### Backup spread
 
-With the above strategy (ignoring the yearly backups), if we create new
-backups every day and apply the retention policy daily, the number of
-kept backups will oscillate between 12 and 16.
+With the default strategy (and ignoring the yearly backups), if we create
+new backups every day and apply the retention policy daily, the number
+of kept backups will oscillate between 12 and 16.
 
 The widest spread for backups (16) would be similar to:
 
@@ -413,6 +419,11 @@ While the tighest spread of backups (12) would look like this:
 
 (Note that `2024-53` and `2025-00` are actually the same week, as discussed earlier.)
 
+The formula for counting maximum number of backups (excluding yearly ones)
+is the sum of daily, weekly, monthly and quarterly backups retained minus
+3 (because the most recent daily backup is also the most recent weekly,
+monthly and quartely backup).
+
 # History
 
 * October 2013
@@ -451,9 +462,9 @@ While the tighest spread of backups (12) would look like this:
 
 * October 2025
 
-  Finished including the retention policy in `dumbbackup cleanup`,
-  and polished the visualization into a report, that became the
-  output of `dumbbackup cleanup --report`.
+  Finished including the retention policy in `dumbbackup cleanup`, and
+  polished the visualization into a report, that became the output of
+  `dumbbackup cleanup --report`. And documented it in detail.
 
 # See also
 
