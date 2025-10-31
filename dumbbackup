@@ -366,29 +366,65 @@ $fatpacked{"DumbBackup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMB
   use warnings;
   
   use Module::Runtime qw( require_module );
+  use DumbBackup::Command;
   
   use feature 'signatures';
   no warnings 'experimental::signatures';
   
-  my %subcommand = (
-      backup  => 'Backup',
-      run     => 'Backup',
-      now     => 'Backup',
-      cleanup => 'Cleanup',
-      keep    => 'Cleanup',
-  );
-  
   sub run ( $self, @args ) {
-      my $cmd = shift @args || '';
-      die "Unknown subcommand $cmd\n"
-        if !exists $subcommand{$cmd};
+      my $command = shift @args || '';
+      $command = 'help' if $command =~ /\A--?h(?:e(?:l(?:p)?)?)?\z/;
+      my $class = DumbBackup::Command->module_for_command($command);
+      die "Unknown subcommand $command\n"
+        unless $class;
   
-      my $class = "DumbBackup::$subcommand{$cmd}";
       require_module($class);
       $class->new( arguments => \@args )->call;
   }
   
   1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  dumbbackup - Better dumb backups now, than perfect backups too late.
+  
+  =head1 SYNOPSIS
+  
+    dumbbackup <command> [options]
+  
+  Commands for backup management:
+  
+    run     - Perform a backup
+    keep    - Apply the retention policy
+  
+  Miscellaneous command:
+  
+    help    - Show the manual page for the given command
+  
+  =head1 DESCRIPTION
+  
+  B<dumbbackup> is the simplest backup solution I could think of,
+  to have some form of backup while I was looking for a perfect
+  solution.
+  
+  Most commands have aliases. Check their documentation for details.
+  
+  =head1 AUTHOR
+  
+  Philippe Bruhat (BooK) <book@cpan.org>
+  
+  =head1 COPYRIGHT
+  
+  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  
+  =head1 LICENSE
+  
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  =cut
 DUMBBACKUP
 
 $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_BACKUP';
@@ -545,6 +581,71 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   }
   
   1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  dumbbackup backup - Perform a dumb backup using rsync
+  
+  =head1 SYNOPSIS
+  
+    dumbbackup backup [options]
+  
+  Aliases: C<backup>, C<run>, C<now>.
+  
+  =head2 OPTIONS
+  
+  =head3 Required options
+  
+      --store <store>        location on the server where to save the backup
+      --target <host>        target hostname (suitable for `rsync`)
+      --server <host>        server hostname (suitable for `rsync`)
+  
+  I<--server> and I<--target> are mutually exclusive.
+  
+  =head3 Backup options
+  
+      --dry-run              print the commands but don't execute them
+  
+      --rsync-opts <options> additional options to be passed to `rsync`
+      --exclude    <pattern> exclusion pattenrs for `rsync`
+      --others               include other backups in the --link-dest option
+      --timeout    <seconds> timeout for the `rsync` command
+  
+      --local-nice   <n>     nice level to apply to the local `rsync` command
+      --local-ionice <n>     ionice level to apply to the local `rsync` command
+      --remote-nice   <n>    nice level to apply to the remote `rsync` command
+      --remote-ionice <n>    ionice level to apply to the remote `rsync` command
+  
+  The I<--nice> and I<--ionice> options will respectively apply to both the
+  I<--local-nice>/I<--remote-nice> and I<--local-ionice>/I<--remote-ionice>
+  options.
+  
+  =head1 DESCRIPTION
+  
+  C<dumbbackup backup> backups a given host on the server.
+  
+  When running the command from the backup server, use the I<--target>
+  option to point to host to backup.
+  
+  When running the command from the host to be backed up, use the I<--server>
+  option to point to the backup server.
+  
+  =head1 AUTHOR
+  
+  Philippe Bruhat (BooK) <book@cpan.org>
+  
+  =head1 COPYRIGHT
+  
+  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  
+  =head1 LICENSE
+  
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  =cut
 DUMBBACKUP_BACKUP
 
 $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_CLEANUP';
@@ -603,7 +704,7 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   sub BUILD ( $self, $args ) {
       my $options = $self->options;
       die "--store is required\n"
-          if !$options->{store};
+          if !$options->{store} && !$options->{help};
   }
   
   my @periods    = qw( days weeks months quarters years );
@@ -728,6 +829,135 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   }
   
   1;
+  
+  __END__
+  
+  =encoding utf-8
+  
+  =head1 NAME
+  
+  dumbbackup cleanup - Clean up old backups, according to the retention policy
+  
+  =head1 SYNOPSIS
+  
+    dumbbackup cleanup [options]
+  
+  Aliases: C<cleanup>, C<keep>.
+  
+  =head2 OPTIONS
+  
+  =head3 Required options
+  
+      --store <directory>    the backup store to cleanup
+  
+  =head3 Removal options
+  
+      --verbose              print the commands as they are executed
+      --dry-run              print the commands but don't execute them
+  
+      --nice   <n>           nice level to apply to the `rm` commands
+      --ionice <n>           ionice level to apply to the `rm` commands
+  
+  The I<--nice> and I<--ionice> options respectively accept the aliases
+  I<--local-nice> and I<--local-ionice> (since the C<rm> commands are
+  run locally).
+  
+  =head3 Retention policy options
+  
+  These options help define the retention policy:
+  
+      --keep-days <n>        keep <n> daily backups
+      --keep-weeks <n>       keep <n> weekly backups
+      --keep-months <n>      keep <n> monthly backups
+      --keep-quarters <n>    keep <n> quarterly backups
+      --keep-years <n>       keep <n> yearly backups
+  
+  All options above accept the corresponding aliases.
+  E.g., I<--days> and I<--daily> are valid aliases for I<--keep-days>.
+  
+  =head3 Reporting options
+  
+      --report               print the retention report for the store
+      --strike               strike the backups to be deleted from the report
+  
+  =head1 DESCRIPTION
+  
+  C<dumbbackup cleanup> removes from the given store the backups that
+  are not protected by the retention policy.
+  
+  This command will remove the backups, unless it's passed on of the
+  I<--dry-run> or I<--report> options.
+  
+  =head2 Retention policy
+  
+  The retention policy is defined by the I<--keep-...> options, which indicate
+  how many backups to keep for each periodicity bucket (daily, weekly, monthly,
+  quarterly, yearly).
+  
+  The default retention policy is to keep:
+  
+  =over 4
+  
+  =item 7 daily backups
+  
+  =item 5 weekly backups
+  
+  =item 3 monthly backups
+  
+  =item 4 quarterly backups
+  
+  =item 10 yearly backups
+  
+  =back
+  
+  That is to say, enough daily backups to cover a week, enough weekly
+  backups to cover a month, enough monthly backups to cover a quarter,
+  and enough quartely backups to cover a year. And 10 yearly backups.
+  
+  =head2 Retention reports
+  
+  The I<--report> option will print a retention report on all the backups
+  found in the store.
+  
+  The table header summarizes the retention policy.
+  
+       7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
+      ──────────────────┼───────────┼───────────┼─────────────┼───────────
+       2024-03-31 Sun   │ 2024-13   │ 2024-03   │ 2024-1 *    │ 2024      
+       2024-06-30 Sun   │ 2024-26   │ 2024-06   │ 2024-2 *    │ 2024      
+       2024-09-30 Mon   │ 2024-40   │ 2024-09   │ 2024-3 *    │ 2024      
+       2024-10-31 Thu   │ 2024-44   │ 2024-10 * │ 2024-4      │ 2024      
+       2024-11-30 Sat   │ 2024-48   │ 2024-11 * │ 2024-4      │ 2024      
+       2024-12-08 Sun   │ 2024-49 * │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-15 Sun   │ 2024-50 * │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-22 Sun   │ 2024-51 * │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-24 Thu   │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-25 Wed * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-26 Thu * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-27 Fri * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-28 Sat * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-29 Sun * │ 2024-52 * │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-30 Mon * │ 2024-53   │ 2024-12   │ 2024-4      │ 2024      
+       2024-12-31 Tue * │ 2024-53 * │ 2024-12 * │ 2024-4 *    │ 2024 *    
+  
+  The backups to be I<kept> are marked with a C<*> in the generated table.
+  Anything not marked as retained is going to be deleted when the actual
+  command is run.
+  
+  =head1 AUTHOR
+  
+  Philippe Bruhat (BooK) <book@cpan.org>
+  
+  =head1 COPYRIGHT
+  
+  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  
+  =head1 LICENSE
+  
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  =cut
 DUMBBACKUP_CLEANUP
 
 $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND';
@@ -737,12 +967,22 @@ $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   
   use String::ShellQuote qw( shell_quote );
   use Getopt::Long ();
+  use Module::Runtime qw( use_module );
+  use Module::Reader ();
+  use Pod::Usage qw( pod2usage );
+  
   
   use Moo::Role;
   use namespace::clean;
   
   no warnings 'experimental::signatures';
   use feature 'signatures';
+  
+  requires
+    'options_spec',
+    'options_defaults',
+    'call',
+    ;
   
   has arguments => (
       is      => 'ro',
@@ -756,13 +996,82 @@ $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
           my %options = $self->options_defaults;
           my $parser  = Getopt::Long::Parser->new;
           #$parser->configure( );
-          my $passed =
-            $parser->getoptionsfromarray( $self->arguments, \%options,
-              $self->options_spec );
-          die "Error in command line arguments\n" if !$passed;
+          say STDERR '' and $self->show_usage
+            unless $parser->getoptionsfromarray( $self->arguments, \%options,
+              help => $self->options_spec );
           \%options;
       },
   );
+  
+  around options_spec => sub ( $orig, @args ) {
+      return ( qw( help pager! ), $orig->(@args) );
+  };
+  
+  around options_defaults => sub ( $orig, @args ) {
+      return ( pager => 1, $orig->(@args) );
+  };
+  
+  sub module_for_command ( $self, $command ) {
+      state $module_for_command = {
+          backup  => 'DumbBackup::Backup',
+          run     => 'DumbBackup::Backup',
+          now     => 'DumbBackup::Backup',
+          cleanup => 'DumbBackup::Cleanup',
+          keep    => 'DumbBackup::Cleanup',
+          help    => 'DumbBackup::Help',
+      };
+      return $module_for_command->{$command} // '';
+  }
+  
+  # help-related methods
+  sub maybe_connect_to_pager ( $self ) {
+      my $options = $self->options;
+      return unless $options->{pager} && -t STDOUT;
+  
+      # find eligible pager
+      my $pager = $ENV{PAGER};           # in the environment
+      ($pager) = map +( split / / )[0],  # keep the command
+        grep { `$_`; $? >= 0 }           # from trying to run
+        'less -V', 'more -V'             # the usual suspects
+        unless $pager;
+  
+      $ENV{LESS} ||= 'FRX';              # less-specific options
+  
+      # fork and exec the pager
+      if ( open STDIN, '-|' ) {
+          exec $pager or warn "Couldn't exec '$pager': $!";
+          exit;
+      }
+      return;
+  }
+  
+  sub show_usage ( $self, $class = ref $self ) {
+      my $module = Module::Reader->new->module( $class );
+      pod2usage(
+          -verbose => 1,
+          -input   => $module->handle,
+  	-output  => \*STDERR,
+      );
+      exit 1;
+  }
+  
+  sub show_help ( $self, $class = ref $self ) {
+      my $module = Module::Reader->new->module($class);
+      $self->maybe_connect_to_pager;
+      pod2usage(
+          -verbose => 2,
+          -input   => $module->handle,
+  	-output  => \*STDOUT,
+      );
+      exit 0;
+  }
+  
+  # short-circuit the --help option
+  around call => sub ( $orig, $self, @args ) {
+      $self->options->{help}
+        ? $self->show_help()
+        : $orig->( $self, @args );
+  };
   
   # a wrapper around system
   sub run_command ($self, @cmd ) {
@@ -790,13 +1099,76 @@ $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
       return $status;
   }
   
-  requires
-    'options_spec',
-    'options_defaults',
-    ;
-  
   1;
 DUMBBACKUP_COMMAND
+
+$fatpacked{"DumbBackup/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_HELP';
+  package DumbBackup::Help;
+  use 5.024;
+  use warnings;
+  
+  use Moo;
+  use namespace::clean;
+  
+  no warnings 'experimental::signatures';
+  use feature 'signatures';
+  
+  with
+    'DumbBackup::Command',
+    ;
+  
+  sub options_spec     { }
+  sub options_defaults { }
+  
+  sub call ( $self ) {
+      my $options = $self->options;
+      my $command = shift $self->arguments->@*;
+      my $class   = $command ? $self->module_for_command($command) : 'DumbBackup';
+      say STDERR "Unknown subcommand '$command'\n"
+        and $self->show_usage('DumbBackup')
+        unless $class;
+      $self->show_help($class);
+  }
+  
+  1;
+  
+  __END__
+  
+  =head1 NAME
+  
+  dumbackup help - Get help on dumbbackup
+  
+  =head1 SYNOPSIS
+  
+    dumbbackup help <command>
+  
+    dumbbackup <command> --help
+  
+  =head1 DESCRIPTION
+  
+  B<dumbbackup help> provides help on any B<dumbbackup> subcommand.
+  
+  It will show the help for B<dumbbackup> itself when called with no arguments.
+  
+  It will automatically connect to a pager is one is defined in the C<PAGER>
+  environment variable, or if one of the usual suspects (B<less>, B<more>)
+  can be found.
+  
+  =head1 AUTHOR
+  
+  Philippe Bruhat (BooK) <book@cpan.org>
+  
+  =head1 COPYRIGHT
+  
+  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  
+  =head1 LICENSE
+  
+  This program is free software; you can redistribute it and/or modify it
+  under the same terms as Perl itself.
+  
+  =cut
+DUMBBACKUP_HELP
 
 $fatpacked{"DumbBackup/Nice.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_NICE';
   package DumbBackup::Nice;
@@ -2031,6 +2403,356 @@ $fatpacked{"Module/Implementation.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"
   # ABSTRACT: Loads one of several alternate underlying implementations for a module
   
 MODULE_IMPLEMENTATION
+
+$fatpacked{"Module/Reader.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_READER';
+  package Module::Reader;
+  BEGIN { require 5.006 }
+  use strict;
+  use warnings;
+  
+  our $VERSION = '0.003003';
+  $VERSION = eval $VERSION;
+  
+  use Exporter (); BEGIN { *import = \&Exporter::import }
+  our @EXPORT_OK = qw(module_content module_handle);
+  our %EXPORT_TAGS = (all => [@EXPORT_OK]);
+  
+  use File::Spec ();
+  use Scalar::Util qw(reftype refaddr openhandle);
+  use Carp qw(croak);
+  use Config ();
+  use Errno qw(EACCES);
+  use constant _OPEN_LAYERS     => "$]" >= 5.008_000 ? ':' : '';
+  use constant _ABORT_ON_EACCES => "$]" >= 5.017_001;
+  use constant _ALLOW_PREFIX    => "$]" >= 5.008009;
+  use constant _VMS             => $^O eq 'VMS' && !!require VMS::Filespec;
+  use constant _WIN32           => $^O eq 'MSWin32';
+  use constant _PMC_ENABLED     => !(
+    exists &Config::non_bincompat_options
+      ? grep { $_ eq 'PERL_DISABLE_PMC' } Config::non_bincompat_options()
+      : $Config::Config{ccflags} =~ /(?:^|\s)-DPERL_DISABLE_PMC\b/
+  );
+  use constant _FAKE_FILE_FORMAT => do {
+    my $uvx = $Config::Config{uvxformat} || '';
+    $uvx =~ tr/"\0//d;
+    $uvx ||= 'lx';
+    "/loader/0x%$uvx/%s"
+  };
+  
+  sub _mod_to_file {
+    my $module = shift;
+    (my $file = "$module.pm") =~ s{::}{/}g;
+    $file;
+  }
+  
+  sub module_content {
+    my $opts = ref $_[-1] eq 'HASH' && pop @_ || {};
+    my $module = shift;
+    $opts->{inc} = [@_]
+      if @_;
+    __PACKAGE__->new($opts)->module($module)->content;
+  }
+  
+  sub module_handle {
+    my $opts = ref $_[-1] eq 'HASH' && pop @_ || {};
+    my $module = shift;
+    $opts->{inc} = [@_]
+      if @_;
+    __PACKAGE__->new($opts)->module($module)->handle;
+  }
+  
+  sub new {
+    my $class = shift;
+    my %options;
+    if (@_ == 1 && ref $_[-1]) {
+      %options = %{(pop)};
+    }
+    elsif (@_ % 2 == 0) {
+      %options = @_;
+    }
+    else {
+      croak "Expected hash ref, or key value pairs.  Got ".@_." arguments.";
+    }
+  
+    $options{inc} ||= \@INC;
+    $options{found} = \%INC
+      if exists $options{found} && $options{found} eq 1;
+    $options{pmc} = _PMC_ENABLED
+      if !exists $options{pmc};
+    $options{open} = 1
+      if !exists $options{open};
+    $options{abort_on_eacces} = _ABORT_ON_EACCES
+      if !exists $options{abort_on_eacces};
+    $options{check_hooks_for_nonsearchable} = 1
+      if !exists $options{check_hooks_for_nonsearchable};
+    bless \%options, $class;
+  }
+  
+  sub module {
+    my ($self, $module) = @_;
+    $self->file(_mod_to_file($module));
+  }
+  
+  sub modules {
+    my ($self, $module) = @_;
+    $self->files(_mod_to_file($module));
+  }
+  
+  sub file {
+    my ($self, $file) = @_;
+    $self->_find($file);
+  }
+  
+  sub files {
+    my ($self, $file) = @_;
+    $self->_find($file, 1);
+  }
+  
+  sub _searchable {
+    my $file = shift;
+      File::Spec->file_name_is_absolute($file) ? 0
+    : _WIN32 && $file =~ m{^\.\.?[/\\]}        ? 0
+    : $file =~ m{^\.\.?/}                      ? 0
+                                               : 1
+  }
+  
+  sub _find {
+    my ($self, $file, $all) = @_;
+  
+    my @found;
+    eval {
+      if (my $found = $self->{found}) {
+        if (defined( my $full = $found->{$file} )) {
+          my $open = length ref $full ? $self->_open_ref($full, $file)
+                                      : $self->_open_file($full, $file);
+          push @found, $open
+            if $open;
+        }
+      }
+    };
+    if (!$all) {
+      return $found[0]
+        if @found;
+      die $@
+        if $@;
+    }
+  
+    my $searchable = _searchable($file);
+    if (!$searchable) {
+      my $open = $self->_open_file($file);
+      if ($all) {
+        push @found, $open;
+      }
+      elsif ($open) {
+        return $open;
+      }
+      else {
+        croak "Can't locate $file";
+      }
+    }
+  
+    my $search = $self->{inc};
+    for my $inc (@$search) {
+      my $open;
+      if (!$searchable) {
+        last
+          if !$self->{check_hooks_for_nonsearchable};
+        next
+          if !length ref $inc;
+      }
+      eval {
+        if (!length ref $inc) {
+          my $full = _VMS ? VMS::Filespec::unixpath($inc) : $inc;
+          $full =~ s{/?$}{/};
+          $full .= $file;
+          $open = $self->_open_file($full, $file, $inc);
+        }
+        else {
+          $open = $self->_open_ref($inc, $file);
+        }
+        push @found, $open
+          if $open;
+      };
+      if (!$all) {
+        return $found[0]
+          if @found;
+        die $@
+          if $@;
+      }
+    }
+    croak "Can't locate $file"
+      if !$all;
+    return @found;
+  }
+  
+  sub _open_file {
+    my ($self, $full, $file, $inc) = @_;
+    $file = $full
+      if !defined $file;
+    for my $try (
+      ($self->{pmc} && $file =~ /\.pm\z/ ? $full.'c' : ()),
+      $full,
+    ) {
+      my $pmc = $full ne $try;
+      if (-e $try) {
+        next
+          if -d _ || -b _;
+        if (open my $fh, '<'._OPEN_LAYERS, $try) {
+          return Module::Reader::File->new(
+            filename        => $file,
+            ($self->{open} ? (raw_filehandle => $fh) : ()),
+            found_file      => $full,
+            disk_file       => $try,
+            is_pmc          => $pmc,
+            (defined $inc ? (inc_entry => $inc) : ()),
+          );
+        }
+      }
+  
+      croak "Can't locate $file:   $full: $!"
+        if $self->{abort_on_eacces} && $! == EACCES && !$pmc;
+    }
+    return;
+  }
+  
+  sub _open_ref {
+    my ($self, $inc, $file) = @_;
+  
+    my @cb;
+    {
+      # strings in arrayrefs are taken as sub names relative to main
+      package
+        main;
+      no strict 'refs';
+      no warnings 'uninitialized';
+      @cb = defined Scalar::Util::blessed $inc ? $inc->INC($file)
+          : ref $inc eq 'ARRAY'                ? $inc->[0]->($inc, $file)
+                                               : $inc->($inc, $file);
+    }
+  
+    return
+      unless length ref $cb[0];
+  
+    my $fake_file = sprintf _FAKE_FILE_FORMAT, refaddr($inc), $file;
+  
+    my $fh;
+    my $prefix;
+    my $cb;
+    my $cb_options;
+  
+    if (_ALLOW_PREFIX && reftype $cb[0] eq 'SCALAR') {
+      $prefix = shift @cb;
+    }
+  
+    if ((reftype $cb[0]||'') eq 'GLOB' && openhandle $cb[0]) {
+      $fh = shift @cb;
+    }
+  
+    if ((reftype $cb[0]||'') eq 'CODE') {
+      $cb = $cb[0];
+      # only one or zero callback options will be passed
+      $cb_options = @cb > 1 ? [ $cb[1] ] : undef;
+    }
+    elsif (!defined $fh && !defined $prefix) {
+      return;
+    }
+    return Module::Reader::File->new(
+      filename => $file,
+      found_file => $fake_file,
+      inc_entry => $inc,
+      (defined $prefix ? (prefix => $prefix) : ()),
+      (defined $fh ? (raw_filehandle => $fh) : ()),
+      (defined $cb ? (read_callback => $cb) : ()),
+      (defined $cb_options ? (read_callback_options => $cb_options) : ()),
+    );
+  }
+  
+  sub inc   { $_[0]->{inc} }
+  sub found { $_[0]->{found} }
+  sub pmc   { $_[0]->{pmc} }
+  sub open  { $_[0]->{open} }
+  
+  {
+    package Module::Reader::File;
+    use constant _OPEN_STRING => "$]" >= 5.008 || !require IO::String;
+    use Carp 'croak';
+  
+    sub new {
+      my ($class, %opts) = @_;
+      my $filename = $opts{filename};
+      if (!exists $opts{module} && $opts{filename}
+        && $opts{filename} =~ m{\A(\w+(?:/\w+)?)\.pm\z}) {
+        my $module = $1;
+        $module =~ s{/}{::}g;
+        $opts{module} = $module;
+      }
+      bless \%opts, $class;
+    }
+  
+    sub filename              { $_[0]->{filename} }
+    sub module                { $_[0]->{module} }
+    sub found_file            { $_[0]->{found_file} }
+    sub disk_file             { $_[0]->{disk_file} }
+    sub is_pmc                { $_[0]->{is_pmc} }
+    sub inc_entry             { $_[0]->{inc_entry} }
+    sub read_callback         { $_[0]->{read_callback} }
+    sub read_callback_options { $_[0]->{read_callback_options} }
+    sub raw_filehandle        {
+      $_[0]->{raw_filehandle} ||= !$_[0]->{disk_file} ? undef : do {
+        open my $fh, '<'.Module::Reader::_OPEN_LAYERS, $_[0]->{disk_file}
+          or croak "Can't locate $_[0]->{disk_file}";
+        $fh;
+      };
+    }
+  
+    sub content {
+      my $self = shift;
+      return $self->{content}
+        if exists $self->{content};
+      my $fh = $self->raw_filehandle;
+      my $cb = $self->read_callback;
+      my $content = defined $self->{prefix} ? ${$self->{prefix}} : '';
+      if ($fh && !$cb) {
+        local $/;
+        $content .= <$fh>;
+      }
+      if ($cb) {
+        my @params = @{$self->read_callback_options||[]};
+        while (1) {
+          local $_ = $fh ? <$fh> : '';
+          $_ = ''
+            if !defined;
+          # perlfunc/require says that the first parameter will be a reference the
+          # sub itself.  this is wrong.  0 will be passed.
+          last if !$cb->(0, @params);
+          $content .= $_;
+        }
+      }
+      return $self->{content} = $content;
+    }
+  
+    sub handle {
+      my $self = shift;
+      my $fh = $self->raw_filehandle;
+      if ($fh && !$self->read_callback && -f $fh) {
+        open my $dup, '<&', $fh
+          or croak "can't dup file handle: $!";
+        return $dup;
+      }
+      my $content = $self->content;
+      if (_OPEN_STRING) {
+        open my $fh, '<', \$content;
+        return $fh;
+      }
+      else {
+        return IO::String->new($content);
+      }
+    }
+  }
+  
+  1;
+  
+MODULE_READER
 
 $fatpacked{"Module/Runtime.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MODULE_RUNTIME';
   
