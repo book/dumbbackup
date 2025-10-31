@@ -3,11 +3,8 @@ use 5.024;
 use warnings;
 use utf8;
 
-use File::Spec       qw();
 use POSIX            qw( strftime ceil );
-use Fcntl            qw( :flock );
-use List::Util       qw( min max );
-use Text::ParseWords qw( shellwords );
+use List::Util       qw( max );
 
 use Moo;
 use namespace::clean;
