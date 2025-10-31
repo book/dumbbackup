@@ -31,19 +31,15 @@ sub options_spec {
     );
 }
 
-# default to keep is enough of one periodicity to cover the enclosing periodicity
-# - days:     a week  is 7 seven days      => keep 7
-# - weeks:    a month is 5 weeks (at most) => keep 5
-# - months:   a quarter is 3 months        => keep 3
-# - quarters: a year is 4 quarters         => keep 4
-# - years:    keep 10, but could be anything
+# default to keep is:
+# enough of one periodicity to cover the enclosing periodicity
 sub options_defaults {
     (
-        days     => 7,
-        weeks    => 5,
-        months   => 3,
-        quarters => 4,
-        years    => 10,
+        days     => 7,     # a week is 7 seven days
+        weeks    => 5,     # a month is 5 weeks (at most)
+        months   => 3,     # a quarter is 3 months
+        quarters => 4,     # a year is 4 quarters
+        years    => 10,    # could be anything
     );
 }
 
