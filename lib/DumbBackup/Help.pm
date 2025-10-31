@@ -2,9 +2,6 @@ package DumbBackup::Help;
 use 5.024;
 use warnings;
 
-use Module::Reader ();
-use Pod::Usage qw( pod2usage );
-
 use Moo;
 use namespace::clean;
 
@@ -15,48 +12,17 @@ with
   'DumbBackup::Command',
   ;
 
-sub options_spec     { qw( pager! ) }
-sub options_defaults { ( pager => 1 ) }
-
-sub show_help_for ( $self, $class ) {
-    my $module = Module::Reader->new->module($class);
-    pod2usage(
-        -verbose => 2,
-        -input   => $module->handle,
-        -output  => \*STDOUT,          # should be the default
-    );
-}
-
-sub maybe_connect_to_pager ( $self ) {
-    my $options = $self->options;
-    return unless $options->{pager} && -t STDOUT;
-
-    # find eligible pager
-    my $pager = $ENV{PAGER};           # in the environment
-    ($pager) = map +( split / / )[0],  # keep the command
-      grep { `$_`; $? >= 0 }           # from trying to run
-      'less -V', 'more -V'             # the usual suspects
-      unless $pager;
-
-    $ENV{LESS} ||= 'FRX';              # less-specific options
-
-    # fork and exec the pager
-    if ( open STDIN, '-|' ) {
-        exec $pager or warn "Couldn't exec '$pager': $!";
-        exit;
-    }
-    return;
-}
+sub options_spec     { }
+sub options_defaults { }
 
 sub call ( $self ) {
     my $options = $self->options;
     my $command = shift $self->arguments->@*;
     my $class   = $command ? $self->module_for_command($command) : 'DumbBackup';
-    die "Unknown subcommand '$command'\n"
+    say STDERR "Unknown subcommand '$command'\n"
+      and $self->show_usage('DumbBackup')
       unless $class;
-
-    $self->maybe_connect_to_pager;
-    $self->show_help_for($class);
+    $self->show_help($class);
 }
 
 1;
