@@ -53,7 +53,7 @@ sub options_defaults {
 sub BUILD ( $self, $args ) {
     my $options = $self->options;
     die "--store is required\n"
-        if !$options->{store};
+        if !$options->{store} && !$options->{help};
 }
 
 my @periods    = qw( days weeks months quarters years );
@@ -178,3 +178,132 @@ sub call ($self) {
 }
 
 1;
+
+__END__
+
+=encoding utf-8
+
+=head1 NAME
+
+dumbbackup cleanup - Clean up old backups, according to the retention policy
+
+=head1 SYNOPSIS
+
+  dumbbackup cleanup [options]
+
+Aliases: C<cleanup>, C<keep>.
+
+=head2 OPTIONS
+
+=head3 Required options
+
+    --store <directory>    the backup store to cleanup
+
+=head3 Removal options
+
+    --verbose              print the commands as they are executed
+    --dry-run              print the commands but don't execute them
+
+    --nice   <n>           nice level to apply to the `rm` commands
+    --ionice <n>           ionice level to apply to the `rm` commands
+
+The I<--nice> and I<--ionice> options respectively accept the aliases
+I<--local-nice> and I<--local-ionice> (since the C<rm> commands are
+run locally).
+
+=head3 Retention policy options
+
+These options help define the retention policy:
+
+    --keep-days <n>        keep <n> daily backups
+    --keep-weeks <n>       keep <n> weekly backups
+    --keep-months <n>      keep <n> monthly backups
+    --keep-quarters <n>    keep <n> quarterly backups
+    --keep-years <n>       keep <n> yearly backups
+
+All options above accept the corresponding aliases.
+E.g., I<--days> and I<--daily> are valid aliases for I<--keep-days>.
+
+=head3 Reporting options
+
+    --report               print the retention report for the store
+    --strike               strike the backups to be deleted from the report
+
+=head1 DESCRIPTION
+
+C<dumbbackup cleanup> removes from the given store the backups that
+are not protected by the retention policy.
+
+This command will remove the backups, unless it's passed on of the
+I<--dry-run> or I<--report> options.
+
+=head2 Retention policy
+
+The retention policy is defined by the I<--keep-...> options, which indicate
+how many backups to keep for each periodicity bucket (daily, weekly, monthly,
+quarterly, yearly).
+
+The default retention policy is to keep:
+
+=over 4
+
+=item 7 daily backups
+
+=item 5 weekly backups
+
+=item 3 monthly backups
+
+=item 4 quarterly backups
+
+=item 10 yearly backups
+
+=back
+
+That is to say, enough daily backups to cover a week, enough weekly
+backups to cover a month, enough monthly backups to cover a quarter,
+and enough quartely backups to cover a year. And 10 yearly backups.
+
+=head2 Retention reports
+
+The I<--report> option will print a retention report on all the backups
+found in the store.
+
+The table header summarizes the retention policy.
+
+     7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
+    ──────────────────┼───────────┼───────────┼─────────────┼───────────
+     2024-03-31 Sun   │ 2024-13   │ 2024-03   │ 2024-1 *    │ 2024      
+     2024-06-30 Sun   │ 2024-26   │ 2024-06   │ 2024-2 *    │ 2024      
+     2024-09-30 Mon   │ 2024-40   │ 2024-09   │ 2024-3 *    │ 2024      
+     2024-10-31 Thu   │ 2024-44   │ 2024-10 * │ 2024-4      │ 2024      
+     2024-11-30 Sat   │ 2024-48   │ 2024-11 * │ 2024-4      │ 2024      
+     2024-12-08 Sun   │ 2024-49 * │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-15 Sun   │ 2024-50 * │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-22 Sun   │ 2024-51 * │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-24 Thu   │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-25 Wed * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-26 Thu * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-27 Fri * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-28 Sat * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-29 Sun * │ 2024-52 * │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-30 Mon * │ 2024-53   │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-31 Tue * │ 2024-53 * │ 2024-12 * │ 2024-4 *    │ 2024 *    
+
+The backups to be I<kept> are marked with a C<*> in the generated table.
+Anything not marked as retained is going to be deleted when the actual
+command is run.
+
+=head1 AUTHOR
+
+Philippe Bruhat (BooK) <book@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut

@@ -82,6 +82,11 @@ executable:
 
   The minimum Perl version required is v5.24 (published in 2016).
 
+* **Self-documented**
+
+  `dumbackp help` or `dumbbackup --help` is the entry point for
+  getting help.
+
 * **Easy cleanup**
 
   Removing a backup is a easy as running `rm -rf` on it.
@@ -195,8 +200,8 @@ The default retention for each periodicity is:
 
 That is to say, enough daily backups to cover a week, enough weekly
 backups to cover a month, enough monthly backups to cover a quarter,
-and enough quartely backups to cover a year. And then 10 years, but
-that could be anything (disk space will expand faster and cheaper
+and enough quartely backups to cover a year. And then 10 yearly backups,
+but that could be anything (disk space will expand faster and cheaper
 than what's needed for an extra backup per year).
 
 This retention policy would be expressed as follows (if that wasn't
