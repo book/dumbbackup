@@ -151,3 +151,68 @@ sub call ( $self ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+dumbbackup backup - Perform a dumb backup using rsync
+
+=head1 SYNOPSIS
+
+  dumbbackup backup [options]
+
+Aliases: C<backup>, C<run>, C<now>.
+
+=head2 OPTIONS
+
+=head3 Required options
+
+    --store <store>        location on the server where to save the backup
+    --target <host>        target hostname (suitable for `rsync`)
+    --server <host>        server hostname (suitable for `rsync`)
+
+I<--server> and I<--target> are mutually exclusive.
+
+=head3 Backup options
+
+    --dry-run              print the commands but don't execute them
+
+    --rsync-opts <options> additional options to be passed to `rsync`
+    --exclude    <pattern> exclusion pattenrs for `rsync`
+    --others               include other backups in the --link-dest option
+    --timeout    <seconds> timeout for the `rsync` command
+
+    --local-nice   <n>     nice level to apply to the local `rsync` command
+    --local-ionice <n>     ionice level to apply to the local `rsync` command
+    --remote-nice   <n>    nice level to apply to the remote `rsync` command
+    --remote-ionice <n>    ionice level to apply to the remote `rsync` command
+
+The I<--nice> and I<--ionice> options will respectively apply to both the
+I<--local-nice>/I<--remote-nice> and I<--local-ionice>/I<--remote-ionice>
+options.
+
+=head1 DESCRIPTION
+
+C<dumbbackup backup> backups a given host on the server.
+
+When running the command from the backup server, use the I<--target>
+option to point to host to backup.
+
+When running the command from the host to be backed up, use the I<--server>
+option to point to the backup server.
+
+=head1 AUTHOR
+
+Philippe Bruhat (BooK) <book@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+=cut
