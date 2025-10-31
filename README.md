@@ -471,6 +471,9 @@ monthly and quartely backup).
   polished the visualization into a report, that became the output of
   `dumbbackup cleanup --report`. And documented it in detail.
 
+  Added support for showing help via `dumbbackup help` or the `--help`
+  option in each subcommmand.
+
 # See also
 
 `dumbbackup` is not the greatest backup system ever, but it works
