@@ -41,10 +41,9 @@ has options => (
         my %options = $self->options_defaults;
         my $parser  = Getopt::Long::Parser->new;
         $parser->configure( $self->getopt_config );
-        my $passed =
-          $parser->getoptionsfromarray( $self->arguments, \%options,
-            $self->options_spec );
-        die "Error in command line arguments\n" if !$passed;
+        $parser->getoptionsfromarray( $self->arguments, \%options,
+            $self->options_spec )
+          or $self->usage_error('');
         \%options;
     },
 );
@@ -92,10 +91,14 @@ sub usage ( $self, %args ) {
     $self->maybe_connect_to_pager
       unless $args{is_error};
 
+    my $message = $args{message};
+    $message .= "\n" if $message && substr( $message, -1 ) ne "\n";
+    $message = ' ' if defined $message && $message eq '';
+
     Pod::Usage::pod2usage(
         -input  => $input,
         -output => $args{is_error} ? \*STDERR : \*STDOUT,
-        ( defined $args{message} ? ( -message => "$args{message}\n" ) : () ),
+        ( defined $message ? ( -message => $message ) : () ),
         (
             $args{is_error}
             ? ( -exitval => 2, -verbose => 1 )
@@ -107,7 +110,7 @@ sub usage ( $self, %args ) {
     return 0;
 }
 
-sub usage_error ( $self, $message ) {
+sub usage_error ( $self, $message = '' ) {
     $self->usage(
         is_error => 1,
         message  => $message,
