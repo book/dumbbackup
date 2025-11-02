@@ -9,20 +9,18 @@ no warnings 'experimental::signatures';
 use feature 'signatures';
 
 with
-  'DumbBackup::Command',
+  'RYO::Command',
   ;
 
 sub options_spec     { }
 sub options_defaults { }
 
 sub call ( $self ) {
-    my $options = $self->options;
     my $command = shift $self->arguments->@*;
-    my $class   = $command ? $self->module_for_command($command) : 'DumbBackup';
-    say STDERR "Unknown subcommand '$command'\n"
-      and $self->show_usage('DumbBackup')
-      unless $class;
-    $self->show_help($class);
+    my $class = $command
+      ? $self->parent->resolve_subcommand($command)
+      : ref $self->parent;
+    $self->usage( class => $class );
 }
 
 1;

@@ -5,8 +5,7 @@ use warnings;
 use Moo::Role;
 use namespace::clean;
 
-no warnings 'experimental::signatures';
-use feature 'signatures';
+use experimental 'signatures';
 
 around options_spec => sub ( $orig, @args ) {
     return (
@@ -19,7 +18,6 @@ around options_spec => sub ( $orig, @args ) {
     );
 };
 
-# niceness options
 before BUILD => sub ( $self, $args ) {
     my $options = $self->options;
     $options->{local_nice}    //= $options->{nice};

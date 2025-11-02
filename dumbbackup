@@ -365,21 +365,29 @@ $fatpacked{"DumbBackup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMB
   use 5.024;
   use warnings;
   
-  use Module::Runtime qw( require_module );
-  use DumbBackup::Command;
+  use List::Util qw( uniq );
   
-  use feature 'signatures';
-  no warnings 'experimental::signatures';
+  use Moo;
+  use namespace::clean;
   
-  sub run ( $self, @args ) {
-      my $command = shift @args || '';
-      $command = 'help' if $command =~ /\A--?h(?:e(?:l(?:p)?)?)?\z/;
-      my $class = DumbBackup::Command->module_for_command($command);
-      die "Unknown subcommand $command\n"
-        unless $class;
+  with
+    'RYO::Command',
+    'RYO::WithSubcommands',
+    ;
   
-      require_module($class);
-      $class->new( arguments => \@args )->call;
+  sub options_spec     { }
+  sub options_defaults { }
+  
+  sub aliases {
+      return (
+          backup  => 'backup',
+          run     => 'backup',
+          now     => 'backup',
+          cleanup => 'cleanup',
+          keep    => 'cleanup',
+          help    => 'help',
+          manual  => 'help',
+      );
   }
   
   1;
@@ -451,8 +459,9 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use feature 'signatures';
   
   with
+    'RYO::Command',
+    'RYO::WithSystemCommands',
     'DumbBackup::Nice',
-    'DumbBackup::Command',
     ;
   
   sub options_spec {
@@ -470,12 +479,14 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
       );
   }
   
-  sub BUILD ( $self, $args ) {
+  sub validate_options ($self) {
       my $options = $self->options;
-      die "--server and --target are mutually exclusive\n"
-          if $options->{server} && $options->{target};
-      die "--store is required\n"
-          if !$options->{store};
+      $self->usage_error('--server and --target are mutually exclusive')
+        if $options->{server} && $options->{target};
+      $self->usage_error('One of --server or --target is required')
+        unless $options->{server} || $options->{target};
+      $self->usage_error('--store is required')
+        unless $options->{store};
   }
   
   sub acquire_lock ($self) {
@@ -664,8 +675,9 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   use feature 'signatures';
   
   with
+    'RYO::Command',
+    'RYO::WithSystemCommands',
     'DumbBackup::Nice',
-    'DumbBackup::Command',
     ;
   
   sub options_spec {
@@ -694,10 +706,10 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
       );
   }
   
-  sub BUILD ( $self, $args ) {
+  sub validate_options ( $self) {
       my $options = $self->options;
-      die "--store is required\n"
-          if !$options->{store} && !$options->{help};
+      $self->usage_error('--store is required')
+        unless $options->{store};
   }
   
   my @periods    = qw( days weeks months quarters years );
@@ -953,148 +965,6 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   =cut
 DUMBBACKUP_CLEANUP
 
-$fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND';
-  package DumbBackup::Command;
-  use 5.024;
-  use warnings;
-  
-  use String::ShellQuote qw( shell_quote );
-  use Getopt::Long ();
-  use Module::Runtime qw( use_module );
-  use Module::Reader ();
-  use Pod::Usage qw( pod2usage );
-  
-  
-  use Moo::Role;
-  use namespace::clean;
-  
-  no warnings 'experimental::signatures';
-  use feature 'signatures';
-  
-  requires
-    'options_spec',
-    'options_defaults',
-    'call',
-    ;
-  
-  has arguments => (
-      is      => 'ro',
-      default => sub { [] },
-  );
-  
-  has options => (
-      is       => 'lazy',
-      init_arg => undef,
-      builder  => sub ($self) {
-          my %options = $self->options_defaults;
-          my $parser  = Getopt::Long::Parser->new;
-          #$parser->configure( );
-          say STDERR '' and $self->show_usage
-            unless $parser->getoptionsfromarray( $self->arguments, \%options,
-              help => $self->options_spec );
-          \%options;
-      },
-  );
-  
-  around options_spec => sub ( $orig, @args ) {
-      return ( qw( help pager! ), $orig->(@args) );
-  };
-  
-  around options_defaults => sub ( $orig, @args ) {
-      return ( pager => 1, $orig->(@args) );
-  };
-  
-  sub module_for_command ( $self, $command ) {
-      state $module_for_command = {
-          backup  => 'DumbBackup::Backup',
-          run     => 'DumbBackup::Backup',
-          now     => 'DumbBackup::Backup',
-          cleanup => 'DumbBackup::Cleanup',
-          keep    => 'DumbBackup::Cleanup',
-          help    => 'DumbBackup::Help',
-      };
-      return $module_for_command->{$command} // '';
-  }
-  
-  # help-related methods
-  sub maybe_connect_to_pager ( $self ) {
-      my $options = $self->options;
-      return unless $options->{pager} && -t STDOUT;
-  
-      # find eligible pager
-      my $pager = $ENV{PAGER};           # in the environment
-      ($pager) = map +( split / / )[0],  # keep the command
-        grep { `$_`; $? >= 0 }           # from trying to run
-        'less -V', 'more -V'             # the usual suspects
-        unless $pager;
-  
-      $ENV{LESS} ||= 'FRX';              # less-specific options
-  
-      # fork and exec the pager
-      if ( open STDIN, '-|' ) {
-          exec $pager or warn "Couldn't exec '$pager': $!";
-          exit;
-      }
-      return;
-  }
-  
-  sub show_usage ( $self, $class = ref $self ) {
-      my $module = Module::Reader->new->module( $class );
-      pod2usage(
-          -verbose => 1,
-          -input   => $module->handle,
-  	-output  => \*STDERR,
-      );
-      exit 1;
-  }
-  
-  sub show_help ( $self, $class = ref $self ) {
-      my $module = Module::Reader->new->module($class);
-      $self->maybe_connect_to_pager;
-      pod2usage(
-          -verbose => 2,
-          -input   => $module->handle,
-  	-output  => \*STDOUT,
-      );
-      exit 0;
-  }
-  
-  # short-circuit the --help option
-  around call => sub ( $orig, $self, @args ) {
-      $self->options->{help}
-        ? $self->show_help()
-        : $orig->( $self, @args );
-  };
-  
-  # a wrapper around system
-  sub run_command ($self, @cmd ) {
-      say "# ", shell_quote(@cmd)
-        if $self->options->{verbose} || $self->options->{dry_run};
-      return 0 if $self->options->{dry_run};
-  
-      system @cmd;
-  
-      my $status = $? >> 8;
-      if ( $? == -1 ) {
-          die "Failed to execute '$cmd[0]': $!\n";
-      }
-      elsif ( $? & 127 ) {
-          die sprintf "'$cmd[0] died with signal %d, %s coredump\n",
-            ( $? & 127 ), ( $? & 128 ) ? 'with' : 'without';
-      }
-      else {
-          if ( my $status = $? >> 8 ) {
-              warn "'$cmd[0]' failed with status $status\n";
-              exit $status;
-          }
-      }
-  
-      return $status;
-  }
-  
-  1;
-DUMBBACKUP_COMMAND
-
 $fatpacked{"DumbBackup/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_HELP';
   package DumbBackup::Help;
   use 5.024;
@@ -1107,20 +977,18 @@ $fatpacked{"DumbBackup/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   use feature 'signatures';
   
   with
-    'DumbBackup::Command',
+    'RYO::Command',
     ;
   
   sub options_spec     { }
   sub options_defaults { }
   
   sub call ( $self ) {
-      my $options = $self->options;
       my $command = shift $self->arguments->@*;
-      my $class   = $command ? $self->module_for_command($command) : 'DumbBackup';
-      say STDERR "Unknown subcommand '$command'\n"
-        and $self->show_usage('DumbBackup')
-        unless $class;
-      $self->show_help($class);
+      my $class = $command
+        ? $self->parent->resolve_subcommand($command)
+        : ref $self->parent;
+      $self->usage( class => $class );
   }
   
   1;
@@ -1171,8 +1039,7 @@ $fatpacked{"DumbBackup/Nice.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   use Moo::Role;
   use namespace::clean;
   
-  no warnings 'experimental::signatures';
-  use feature 'signatures';
+  use experimental 'signatures';
   
   around options_spec => sub ( $orig, @args ) {
       return (
@@ -1185,7 +1052,6 @@ $fatpacked{"DumbBackup/Nice.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
       );
   };
   
-  # niceness options
   before BUILD => sub ( $self, $args ) {
       my $options = $self->options;
       $options->{local_nice}    //= $options->{nice};
@@ -4875,6 +4741,255 @@ $fatpacked{"Package/Stash/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<
   
 PACKAGE_STASH_PP
 
+$fatpacked{"RYO/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'RYO_COMMAND';
+  package RYO::Command;
+  use 5.024;
+  use warnings;
+  
+  use Getopt::Long ();
+  use Pod::Usage qw( pod2usage );
+  
+  use Moo::Role;
+  use namespace::clean;
+  
+  use experimental 'signatures';
+  
+  requires
+    'options_spec',
+    'options_defaults',
+    ;
+  
+  has parent => (
+      is      => 'ro',
+      default => '',
+  );
+  
+  has arguments => (
+      is      => 'ro',
+      default => sub { [] },
+  );
+  
+  sub getopt_config { }
+  
+  around options_spec => sub ( $orig, @args ) {
+      return ( 'help', 'pager!', $orig->(@args) );
+  };
+  around options_defaults => sub ( $orig, @args ) {
+      return ( pager => 1, $orig->(@args) );
+  };
+  
+  has options => (
+      is       => 'lazy',
+      init_arg => undef,
+      builder  => sub ($self) {
+          my %options = $self->options_defaults;
+          my $parser  = Getopt::Long::Parser->new;
+          $parser->configure( $self->getopt_config );
+          $parser->getoptionsfromarray( $self->arguments, \%options,
+              $self->options_spec )
+            or $self->usage_error('');
+          \%options;
+      },
+  );
+  
+  sub BUILD ($self, $args ) {
+      $self->options;    # build options from arguments
+  }
+  
+  sub validate_options { }
+  
+  # help-related methods
+  sub maybe_connect_to_pager ( $self ) {
+      my $options = $self->options;
+      return if !$options->{pager} || !-t STDOUT;
+  
+      # find eligible pager
+      my $pager = $ENV{PAGER};           # in the environment
+      ($pager) = map +( split / / )[0],  # keep the command
+        grep { `$_`; $? >= 0 }           # from trying to run
+        'less -V', 'more -V'             # the usual suspects
+        unless $pager;
+  
+      $ENV{LESS} ||= 'FRX';              # less-specific options
+  
+      # fork and exec the pager
+      if ( open STDIN, '-|' ) {
+          exec $pager or warn "Couldn't exec '$pager': $!";
+          exit;
+      }
+      return;
+  }
+  
+  sub usage ( $self, %args ) {
+      my $class = $args{class} // ref $self;
+      my $file  = "$class.pm" =~ s{::}{/}gr;
+      my $input = $INC{$file};
+      if ( !-e $input ) {
+          eval { require Module::Reader } or do {
+              die "Unable to read module $class!\n";
+          };
+  	$input = Module::Reader::module_handle($class);
+      }
+  
+      # don't use a pager for errors
+      $self->maybe_connect_to_pager
+        unless $args{is_error};
+  
+      my $message = $args{message};
+      $message .= "\n" if $message && substr( $message, -1 ) ne "\n";
+      $message = ' ' if defined $message && $message eq '';
+  
+      Pod::Usage::pod2usage(
+          -input  => $input,
+          -output => $args{is_error} ? \*STDERR : \*STDOUT,
+          ( defined $message ? ( -message => $message ) : () ),
+          (
+              $args{is_error}
+              ? ( -exitval => 2, -verbose => 1 )
+              : ( -exitval => 0, -verbose => 2 )
+          ),
+          -noperldoc => 1,    # perldoc also does some pager detection, skip it
+      );
+  
+      return 0;
+  }
+  
+  sub usage_error ( $self, $message = '' ) {
+      $self->usage(
+          is_error => 1,
+          message  => $message,
+      );
+  }
+  
+  sub help ( $self ) { $self->usage }
+  
+  sub run ( $self ) {
+      my $options = $self->options;
+      if ( $options->{help} ) { $self->help }
+      else {
+          $self->validate_options;
+          eval { $self->call; 1 }
+            or do { warn $@; return 1; }
+      }
+      return 0;
+  }
+  
+  1;
+RYO_COMMAND
+
+$fatpacked{"RYO/WithSubcommands.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'RYO_WITHSUBCOMMANDS';
+  package RYO::WithSubcommands;
+  use 5.024;
+  use warnings;
+  
+  use List::Util qw( uniq );
+  
+  use Moo::Role;
+  use namespace::clean;
+  
+  use experimental 'signatures';
+  
+  requires 'usage_error';
+  
+  around getopt_config => sub ( $orig, @args ) {
+      return ( qw( require_order pass_through ), $orig->(@args) );
+  };
+  
+  sub package_prefix ($self) { ref $self }
+  
+  # an empty aliases method implies that
+  # no abbreviations will be supported
+  sub aliases { }
+  
+  sub resolve_alias ( $self, $command ) {
+      my %alias      = $self->aliases;
+      my @candidates = sort grep /\A$command/, uniq %alias;
+      $self->usage_error("Ambiguous command '$command': @candidates")
+        if @candidates > 1;
+      my $cmd = shift @candidates;
+      return $cmd ? $alias{$cmd} // $cmd : $command;
+  }
+  
+  sub resolve_subcommand ( $self, $command ) {
+  
+      $self->usage_error('No command specified!')
+        if !defined $command;
+  
+      $self->usage_error("Invalid command: '$command'")
+        if $command !~ /\A[a-z]+(?:-[a-z]+)*\z/;
+  
+      $command = $self->resolve_alias($command);
+  
+      my $module = $command =~ s/(?:\A|-)(.)/\u$1/gr;
+      $module = $self->package_prefix . "::$module";
+      my $file = "$module.pm" =~ s{::}{/}gr;
+      eval { require $file } or do {
+          my $error = $@;
+          if ( $error =~ /\ACan't locate \Q$file\E / ) {
+              $self->usage_error("Unknown command: '$command'");
+          }
+          else { die $error }
+      };
+  
+      return $module;
+  }
+  
+  sub call ($self) {
+      my $command = shift $self->arguments->@*;
+      exit $self->resolve_subcommand($command)->new(
+          parent    => $self,
+          arguments => [ $self->arguments->@* ],
+      )->run;
+  }
+  
+  1;
+RYO_WITHSUBCOMMANDS
+
+$fatpacked{"RYO/WithSystemCommands.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'RYO_WITHSYSTEMCOMMANDS';
+  package RYO::WithSystemCommands;
+  use 5.024;
+  use warnings;
+  
+  use String::ShellQuote qw( shell_quote );
+  
+  use Moo::Role;
+  use namespace::clean;
+  
+  use experimental 'signatures';
+  
+  around options_spec => sub ( $orig, @args ) {
+      return ( 'dry_run|dry-run', 'verbose', $orig->(@args) );
+  };
+  
+  sub run_command ( $self, @cmd ) {
+      my $options = $self->options;
+      say "# ", shell_quote(@cmd)
+        if $options->{verbose} || $options->{dry_run};
+      return 0 if $options->{dry_run};
+  
+      system @cmd;
+  
+      my $status = $? >> 8;
+      if ( $? == -1 ) {
+          die "Failed to execute '$cmd[0]': $!\n";
+      }
+      elsif ( $? & 127 ) {
+          die sprintf "'$cmd[0] died with signal %d, %s coredump\n",
+            ( $? & 127 ), ( $? & 128 ) ? 'with' : 'without';
+      }
+      else {
+          if ( my $status = $? >> 8 ) {
+              warn "'$cmd[0]' failed with status $status\n";
+              exit $status;
+          }
+      }
+  
+      return $status;
+  }
+  
+  1;
+RYO_WITHSYSTEMCOMMANDS
+
 $fatpacked{"Role/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'ROLE_TINY';
   package Role::Tiny;
   use strict;
@@ -6855,4 +6970,4 @@ unshift @INC, bless \%fatpacked, $class;
   } # END OF FATPACK CODE
 
 use DumbBackup;
-exit DumbBackup->run( @ARGV ) || 0;
+exit DumbBackup->new( arguments => [@ARGV] )->run || 0;

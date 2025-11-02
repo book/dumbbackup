@@ -21,8 +21,9 @@ no warnings 'experimental::signatures';
 use feature 'signatures';
 
 with
+  'RYO::Command',
+  'RYO::WithSystemCommands',
   'DumbBackup::Nice',
-  'DumbBackup::Command',
   ;
 
 sub options_spec {
@@ -40,12 +41,14 @@ sub options_defaults {
     );
 }
 
-sub BUILD ( $self, $args ) {
+sub validate_options ($self) {
     my $options = $self->options;
-    die "--server and --target are mutually exclusive\n"
-        if $options->{server} && $options->{target};
-    die "--store is required\n"
-        if !$options->{store};
+    $self->usage_error('--server and --target are mutually exclusive')
+      if $options->{server} && $options->{target};
+    $self->usage_error('One of --server or --target is required')
+      unless $options->{server} || $options->{target};
+    $self->usage_error('--store is required')
+      unless $options->{store};
 }
 
 sub acquire_lock ($self) {
