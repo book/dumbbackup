@@ -13,8 +13,9 @@ no warnings 'experimental::signatures';
 use feature 'signatures';
 
 with
+  'RYO::Command',
+  'RYO::WithSystemCommands',
   'DumbBackup::Nice',
-  'DumbBackup::Command',
   ;
 
 sub options_spec {
@@ -43,10 +44,10 @@ sub options_defaults {
     );
 }
 
-sub BUILD ( $self, $args ) {
+sub validate_options ( $self) {
     my $options = $self->options;
-    die "--store is required\n"
-        if !$options->{store} && !$options->{help};
+    $self->usage_error('--store is required')
+      unless $options->{store};
 }
 
 my @periods    = qw( days weeks months quarters years );

@@ -2,21 +2,29 @@ package DumbBackup;
 use 5.024;
 use warnings;
 
-use Module::Runtime qw( require_module );
-use DumbBackup::Command;
+use List::Util qw( uniq );
 
-use feature 'signatures';
-no warnings 'experimental::signatures';
+use Moo;
+use namespace::clean;
 
-sub run ( $self, @args ) {
-    my $command = shift @args || '';
-    $command = 'help' if $command =~ /\A--?h(?:e(?:l(?:p)?)?)?\z/;
-    my $class = DumbBackup::Command->module_for_command($command);
-    die "Unknown subcommand $command\n"
-      unless $class;
+with
+  'RYO::Command',
+  'RYO::WithSubcommands',
+  ;
 
-    require_module($class);
-    $class->new( arguments => \@args )->call;
+sub options_spec     { }
+sub options_defaults { }
+
+sub aliases {
+    return (
+        backup  => 'backup',
+        run     => 'backup',
+        now     => 'backup',
+        cleanup => 'cleanup',
+        keep    => 'cleanup',
+        help    => 'help',
+        manual  => 'help',
+    );
 }
 
 1;
