@@ -120,7 +120,8 @@ sub scan {
                 $module_name =~ /\ADumbBackup/
                   ? <>                          # slurp the whole file
                   : <>                          # slurp the whole file, and
-                  =~ s<^__END__.*><>mrs         # drop anything after __END__
+                  =~ s<^\s*#pod.*\n>   <>mrg    # drop #pod lines
+                  =~ s<^__END__.*>     <>mrs    # drop anything after __END__
                   =~ s<^=[a-z].*?^=cut><>mrs    # drop remaining documentation
                   ;
             };
