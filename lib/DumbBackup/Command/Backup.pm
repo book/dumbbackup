@@ -1,4 +1,4 @@
-package DumbBackup::Backup;
+package DumbBackup::Command::Backup;
 use 5.024;
 use warnings;
 

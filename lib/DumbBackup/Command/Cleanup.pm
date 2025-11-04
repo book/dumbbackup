@@ -1,4 +1,4 @@
-package DumbBackup::Cleanup;
+package DumbBackup::Command::Cleanup;
 use 5.024;
 use warnings;
 use utf8;
