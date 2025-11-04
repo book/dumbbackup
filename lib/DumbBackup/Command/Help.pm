@@ -5,8 +5,7 @@ use warnings;
 use Moo;
 use namespace::clean;
 
-no warnings 'experimental::signatures';
-use feature 'signatures';
+use experimental 'signatures';
 
 with
   'RYO::Command',
