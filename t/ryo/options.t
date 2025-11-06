@@ -24,31 +24,36 @@ package MyApp {
 }
 
 # tests
-is_deeply(
-    MyApp->new( arguments => [] )->options,
-    {
-        pager => 1,        # default from RYO::Command
-        bar   => 'baz',    # from MyApp
-    },
-    'options for: myapp'
+my @tests = (
+    [
+        [],
+        {
+            pager => 1,        # default from RYO::Command
+            bar   => 'baz',    # from MyApp
+        },
+    ],
+    [
+        ['--foo'],
+        {
+            pager => 1,        # default from RYO::Command
+            foo   => 1,        # from MyApp::OptionFoo
+            bar   => 'baz',    # from MyApp
+        },
+    ],
+    [
+        ['--nofoo'],
+        {
+            pager => 1,        # default from RYO::Command
+            foo   => 0,        # from MyApp::OptionFoo
+            bar   => 'baz',    # from MyApp
+        },
+    ],
 );
-is_deeply(
-    MyApp->new( arguments => ['--foo'] )->options,
-    {
-        pager => 1,        # default from RYO::Command
-        foo   => 1,        # from MyApp::OptionFoo
-        bar   => 'baz',    # from MyApp
-    },
-    'options for: myapp --foo'
-);
-is_deeply(
-    MyApp->new( arguments => ['--no-foo'] )->options,
-    {
-        pager => 1,        # default from RYO::Command
-        foo   => 0,        # from MyApp::OptionFoo
-        bar   => 'baz',    # from MyApp
-    },
-    'options for: myapp --foo'
-);
+
+for my $t (@tests) {
+    my ( $args, $expected ) = @$t;
+    is_deeply( MyApp->new( arguments => [@$args] )->options, $expected,
+        "options for: myapp @$args" );
+}
 
 done_testing;
