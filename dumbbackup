@@ -360,8 +360,8 @@ $fatpacked{"Class/Method/Modifiers.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
   
 CLASS_METHOD_MODIFIERS
 
-$fatpacked{"DumbBackup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP';
-  package DumbBackup;
+$fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND';
+  package DumbBackup::Command;
   use 5.024;
   use warnings;
   
@@ -433,10 +433,10 @@ $fatpacked{"DumbBackup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMB
   under the same terms as Perl itself.
   
   =cut
-DUMBBACKUP
+DUMBBACKUP_COMMAND
 
-$fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_BACKUP';
-  package DumbBackup::Backup;
+$fatpacked{"DumbBackup/Command/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND_BACKUP';
+  package DumbBackup::Command::Backup;
   use 5.024;
   use warnings;
   
@@ -455,8 +455,7 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   use Moo;
   use namespace::clean;
   
-  no warnings 'experimental::signatures';
-  use feature 'signatures';
+  use experimental 'signatures';
   
   with
     'RYO::Command',
@@ -657,10 +656,10 @@ $fatpacked{"DumbBackup/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".
   under the same terms as Perl itself.
   
   =cut
-DUMBBACKUP_BACKUP
+DUMBBACKUP_COMMAND_BACKUP
 
-$fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_CLEANUP';
-  package DumbBackup::Cleanup;
+$fatpacked{"DumbBackup/Command/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND_CLEANUP';
+  package DumbBackup::Command::Cleanup;
   use 5.024;
   use warnings;
   use utf8;
@@ -671,8 +670,7 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   use Moo;
   use namespace::clean;
   
-  no warnings 'experimental::signatures';
-  use feature 'signatures';
+  use experimental 'signatures';
   
   with
     'RYO::Command',
@@ -963,18 +961,17 @@ $fatpacked{"DumbBackup/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   under the same terms as Perl itself.
   
   =cut
-DUMBBACKUP_CLEANUP
+DUMBBACKUP_COMMAND_CLEANUP
 
-$fatpacked{"DumbBackup/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_HELP';
-  package DumbBackup::Help;
+$fatpacked{"DumbBackup/Command/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_COMMAND_HELP';
+  package DumbBackup::Command::Help;
   use 5.024;
   use warnings;
   
   use Moo;
   use namespace::clean;
   
-  no warnings 'experimental::signatures';
-  use feature 'signatures';
+  use experimental 'signatures';
   
   with
     'RYO::Command',
@@ -1029,7 +1026,7 @@ $fatpacked{"DumbBackup/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   under the same terms as Perl itself.
   
   =cut
-DUMBBACKUP_HELP
+DUMBBACKUP_COMMAND_HELP
 
 $fatpacked{"DumbBackup/Nice.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_NICE';
   package DumbBackup::Nice;
@@ -4347,16 +4344,6 @@ $fatpacked{"Package/Stash/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<
   # pre-5.10, ->isa lookups were cached in the ::ISA::CACHE:: slot
   use constant HAS_ISA_CACHE => ($] < 5.010);
   
-  #pod =head1 SYNOPSIS
-  #pod
-  #pod   use Package::Stash;
-  #pod
-  #pod =head1 DESCRIPTION
-  #pod
-  #pod This is a backend for L<Package::Stash> implemented in pure perl, for those without a compiler or who would like to use this inline in scripts.
-  #pod
-  #pod =cut
-  
   sub new {
       my $class = shift;
       my ($package) = @_;
@@ -6969,5 +6956,5 @@ else {
 unshift @INC, bless \%fatpacked, $class;
   } # END OF FATPACK CODE
 
-use DumbBackup;
-exit DumbBackup->new( arguments => [@ARGV] )->run || 0;
+use DumbBackup::Command;
+exit DumbBackup::Command->new( arguments => [@ARGV] )->run || 0;

@@ -1,12 +1,11 @@
-package DumbBackup::Help;
+package DumbBackup::Command::Help;
 use 5.024;
 use warnings;
 
 use Moo;
 use namespace::clean;
 
-no warnings 'experimental::signatures';
-use feature 'signatures';
+use experimental 'signatures';
 
 with
   'RYO::Command',

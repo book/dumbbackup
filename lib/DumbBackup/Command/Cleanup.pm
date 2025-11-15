@@ -1,4 +1,4 @@
-package DumbBackup::Cleanup;
+package DumbBackup::Command::Cleanup;
 use 5.024;
 use warnings;
 use utf8;
@@ -9,8 +9,7 @@ use List::Util       qw( max );
 use Moo;
 use namespace::clean;
 
-no warnings 'experimental::signatures';
-use feature 'signatures';
+use experimental 'signatures';
 
 with
   'RYO::Command',
