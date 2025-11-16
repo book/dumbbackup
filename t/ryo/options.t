@@ -40,17 +40,19 @@ my @tests = (
             pager => 1,        # default from RYO::Command
             bar   => 'baz',    # from MyApp
         },
+        [],
     ],
     [
         {
             roles => ['MyApp::OptionFoo'],
-            args  => ['--foo'],
+            args  => [ '--foo', 'zlonk' ],
         },
         {
             pager => 1,        # default from RYO::Command
             foo   => 1,        # from MyApp::OptionFoo
             bar   => 'baz',    # from MyApp
         },
+        ['zlonk'],
     ],
     [
         {
@@ -62,22 +64,24 @@ my @tests = (
             foo   => 0,        # from MyApp::OptionFoo
             bar   => 'baz',    # from MyApp
         },
+        [],
     ],
     [
         {
             roles => ['MyApp::OptionNum'],
-            args  => ['--num', 3 ],
+            args  => [ '--num', 3 ],
         },
         {
             pager => 1,        # default from RYO::Command
             num   => 3,        # from MyApp::OptionNum
             bar   => 'baz',    # from MyApp
         },
+        [],
     ],
     [
         {
-            roles => ['MyApp::OptionNum', 'MyApp::OptionFoo'],
-            args  => ['--num', 7, '--foo' ],
+            roles => [ 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
+            args  => [ '--num',            7, '--foo' ],
         },
         {
             pager => 1,        # default from RYO::Command
@@ -85,17 +89,31 @@ my @tests = (
             foo   => 1,        # from MyApp::OptionFoo
             bar   => 'baz',    # from MyApp
         },
+        [],
+    ],
+    [
+        {
+            roles => [ 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
+            args  => [qw( -nu 9 -- --more --options and args )],
+        },
+        {
+            pager => 1,        # default from RYO::Command
+            num   => 9,        # from MyApp::OptionNum
+            bar   => 'baz',    # from MyApp
+        },
+        [qw( --more --options and args )],
     ],
 );
 
 for my $t (@tests) {
-    my ( $setup, $expected ) = @$t;
-    is_deeply(
-        Role::Tiny->create_class_with_roles( MyApp => $setup->{roles}->@* )
-          ->new( arguments => [ $setup->{args}->@* ] )->options,
-        $expected,
-        "options for: myapp $setup->{args}->@*"
-    );
+    my ( $setup, $expected_options, $expected_arguments ) = @$t;
+    my $app =
+      Role::Tiny->create_class_with_roles( MyApp => $setup->{roles}->@* )
+      ->new( arguments => [ $setup->{args}->@* ] );
+    is_deeply( $app->options, $expected_options,
+        "options for: myapp $setup->{args}->@*" );
+    is_deeply( $app->arguments, $expected_arguments,
+        "arguments for: myapp $setup->{args}->@*" );
 }
 
 done_testing;
