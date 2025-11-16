@@ -493,3 +493,10 @@ monthly and quartely backup).
 well enough for my simple use case.
 
 [There are many other options available.](https://en.wikipedia.org/wiki/List_of_backup_software#Free_and_open-source_software)
+
+And more exist that are not listed in the above Wikipedia page
+(in the order I learnt about them):
+
+* [rsnapshot](https://github.com/rsnapshot/rsnapshot)
+* [Backup Manager](https://github.com/sukria/Backup-Manager/)
+* [linux-timemachine](https://github.com/cytopia/linux-timemachine)
