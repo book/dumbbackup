@@ -128,6 +128,9 @@ updated (and not delete any by default). It also help ensure that if a
 backup failed (e.g. network failure), the next run will catch anything
 that was missed in the previous run.
 
+It is recommended to run the tool as `root`, so that *all* files can be
+backed up.
+
 ### Unattended backups and security
 
 To enable unattended backups (the best kind of backups), you'll need
