@@ -28,6 +28,15 @@ package MyApp {
     sub options_defaults { ( bar => 'baz' ) }
     sub call ( $self )   { pass('ran the app') }
 }
+package MyAppThrough {
+    use Moo;
+    use experimental 'signatures';
+    with 'RYO::Command';
+    sub options_spec     { qw( bar=s ) }
+    sub options_defaults { ( bar => 'baz' ) }
+    sub call ( $self )   { pass('ran the app') }
+    sub getopt_config    { qw( pass_through ) }
+}
 
 # tests
 my @tests = (
@@ -57,26 +66,26 @@ my @tests = (
     [
         {
             roles => [ MyApp => 'MyApp::OptionFoo' ],
-            args  => ['--no-foo'],
+            args  => [qw( --no-foo quux )],
         },
         {
             pager => 1,        # default from RYO::Command
             foo   => 0,        # from MyApp::OptionFoo
             bar   => 'baz',    # from MyApp
         },
-        [],
+        [qw( quux )],
     ],
     [
         {
-            roles => [ MyApp => 'MyApp::OptionNum' ],
-            args  => [ '--num', 3 ],
+            roles => [ MyAppThrough => 'MyApp::OptionNum' ],
+            args  => [qw( --num 3 quux -- fred )],
         },
         {
             pager => 1,        # default from RYO::Command
             num   => 3,        # from MyApp::OptionNum
             bar   => 'baz',    # from MyApp
         },
-        [],
+        [qw( quux -- fred )],    # pass_through
     ],
     [
         {
