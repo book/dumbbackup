@@ -77,18 +77,6 @@ my @tests = (
     ],
     [
         {
-            roles => [ MyAppThrough => 'MyApp::OptionNum' ],
-            args  => [qw( --num 3 quux -- fred )],
-        },
-        {
-            pager => 1,        # default from RYO::Command
-            num   => 3,        # from MyApp::OptionNum
-            bar   => 'baz',    # from MyApp
-        },
-        [qw( quux -- fred )],    # pass_through
-    ],
-    [
-        {
             roles => [ MyApp => 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
             args  => [ '--num', 7, '--foo' ],
         },
@@ -112,14 +100,39 @@ my @tests = (
         },
         [qw( --more --options and args )],
     ],
+    [
+        {
+            roles => [ MyAppThrough => 'MyApp::OptionNum' ],
+            args  => [qw( --num 3 quux -- fred )],
+        },
+        {
+            pager => 1,        # default from RYO::Command
+            num   => 3,        # from MyApp::OptionNum
+            bar   => 'baz',    # from MyApp
+        },
+        [qw( quux -- fred )],    # pass_through
+    ],
+    [
+        {
+            roles => ['MyAppThrough'],
+            args  => [qw( -- zlonk bam )],
+        },
+        {
+            pager => 1,        # default from RYO::Command
+            bar   => 'baz',    # from MyApp
+        },
+        [qw( -- zlonk bam )],    # pass_through
+    ],
 );
 
 for my $t (@tests) {
     my ( $setup, $expected_options, $expected_arguments ) = @$t;
-    my $name = lc $setup->{roles}[0];
-    my $app =
-      Role::Tiny->create_class_with_roles( $setup->{roles}->@* )
-      ->new( arguments => [ $setup->{args}->@* ] );
+    my ( $base, @roles ) = $setup->{roles}->@*;
+    my $class = @roles
+      ? Role::Tiny->create_class_with_roles( $setup->{roles}->@* )
+      : $base;
+    my $app  = $class->new( arguments => [ $setup->{args}->@* ] );
+    my $name = lc $base;
     is_deeply( $app->options, $expected_options,
         "options for: $name $setup->{args}->@*" );
     is_deeply( $app->arguments, $expected_arguments,
