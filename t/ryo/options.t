@@ -33,7 +33,7 @@ package MyApp {
 my @tests = (
     [
         {
-            roles => ['MyApp::OptionFoo'],
+            roles => [ MyApp => 'MyApp::OptionFoo' ],
             args  => [],
         },
         {
@@ -44,7 +44,7 @@ my @tests = (
     ],
     [
         {
-            roles => ['MyApp::OptionFoo'],
+            roles => [ MyApp => 'MyApp::OptionFoo' ],
             args  => [ '--foo', 'zlonk' ],
         },
         {
@@ -56,7 +56,7 @@ my @tests = (
     ],
     [
         {
-            roles => ['MyApp::OptionFoo'],
+            roles => [ MyApp => 'MyApp::OptionFoo' ],
             args  => ['--no-foo'],
         },
         {
@@ -68,7 +68,7 @@ my @tests = (
     ],
     [
         {
-            roles => ['MyApp::OptionNum'],
+            roles => [ MyApp => 'MyApp::OptionNum' ],
             args  => [ '--num', 3 ],
         },
         {
@@ -80,26 +80,26 @@ my @tests = (
     ],
     [
         {
-            roles => [ 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
-            args  => [ '--num',            7, '--foo' ],
+            roles => [ MyApp => 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
+            args  => [ '--num', 7, '--foo' ],
         },
         {
-            pager => 1,        # default from RYO::Command
-            num   => 7,        # from MyApp::OptionNum
-            foo   => 1,        # from MyApp::OptionFoo
-            bar   => 'baz',    # from MyApp
+            pager => 1,          # default from RYO::Command
+            num   => 7,          # from MyApp::OptionNum
+            foo   => 1,          # from MyApp::OptionFoo
+            bar   => 'baz',      # from MyApp
         },
         [],
     ],
     [
         {
-            roles => [ 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
+            roles => [ MyApp => 'MyApp::OptionNum', 'MyApp::OptionFoo' ],
             args  => [qw( -nu 9 -- --more --options and args )],
         },
         {
-            pager => 1,        # default from RYO::Command
-            num   => 9,        # from MyApp::OptionNum
-            bar   => 'baz',    # from MyApp
+            pager => 1,          # default from RYO::Command
+            num   => 9,          # from MyApp::OptionNum
+            bar   => 'baz',      # from MyApp
         },
         [qw( --more --options and args )],
     ],
@@ -107,13 +107,14 @@ my @tests = (
 
 for my $t (@tests) {
     my ( $setup, $expected_options, $expected_arguments ) = @$t;
+    my $name = lc $setup->{roles}[0];
     my $app =
-      Role::Tiny->create_class_with_roles( MyApp => $setup->{roles}->@* )
+      Role::Tiny->create_class_with_roles( $setup->{roles}->@* )
       ->new( arguments => [ $setup->{args}->@* ] );
     is_deeply( $app->options, $expected_options,
-        "options for: myapp $setup->{args}->@*" );
+        "options for: $name $setup->{args}->@*" );
     is_deeply( $app->arguments, $expected_arguments,
-        "arguments for: myapp $setup->{args}->@*" );
+        "arguments for: $name $setup->{args}->@*" );
 }
 
 done_testing;
