@@ -477,6 +477,16 @@ monthly and quartely backup).
   Added support for showing help via `dumbbackup help` or the `--help`
   option in each subcommmand.
 
+* November 2025
+
+  Rewrote the application with my own new framework for building CLI
+  tools, based on an idea I've had for over a decade now: build a
+  command-line tool by consuming roles that extend it.
+
+  This allows a role to add support for specific options which, combined
+  with clever use of lazy attributes and method modifiers, can easily
+  provide a shared set of options across subcommands.
+
 # See also
 
 `dumbbackup` is not the greatest backup system ever, but it works
