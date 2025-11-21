@@ -184,7 +184,7 @@ dumbbackup backup - Perform a dumb backup using rsync
 
   dumbbackup backup [options] source... destination -- [rsync options]
 
-Aliases: C<backup>, C<now>, C<run>.
+Aliases: C<backup>, C<now>, C<run>, C<save>.
 
 =head2 OPTIONS
 

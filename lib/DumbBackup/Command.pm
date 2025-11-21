@@ -18,8 +18,9 @@ sub options_defaults { }
 sub aliases {
     return (
         backup  => 'backup',
-        run     => 'backup',
         now     => 'backup',
+        run     => 'backup',
+        save    => 'backup',
         cleanup => 'cleanup',
         keep    => 'cleanup',
         help    => 'help',
