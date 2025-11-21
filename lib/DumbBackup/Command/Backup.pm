@@ -13,6 +13,7 @@ use DumbBackup::Sort qw( by_date );
 my $by_date = \&by_date;
 
 use constant MAX_LINK_DEST => 20;
+use constant PARTIAL       => '.partial';
 use constant BACKUP_GLOB   => join '-',
   '{19,20}[0-9][0-9]',           # year
   '{0[1-9],1[0-2]}',             # month
@@ -57,7 +58,7 @@ sub list_backups ( $self, $host, $path, $glob = BACKUP_GLOB ) {
     return @backups;
 }
 
-sub build_rsync_command ($self) {
+sub build_rsync_src_dest_opts ($self) {
     my $options = $self->options;
 
     # separate the arguments from the rsync options
@@ -97,9 +98,18 @@ sub build_rsync_command ($self) {
       if @args < 2;
 
     # inject default rsync options
-    unshift @rsync_opts, qw(
-      -aH --partial --numeric-ids
-    );
+    unshift @rsync_opts,           # default options for rsync:
+      '--recursive',               # recurse into directories
+      '--links',                   # copy symlinks as symlinks
+      '--perms',                   # preserve permissions
+      '--times',                   # preserve modification times
+      '--group',                   # preserve group
+      '--owner',                   # preserve owner (super-user only)
+      '--hard-links',              # preserve hard links
+      '--numeric-ids',             # don't map uid/gid values by user/group name
+      '--partial',                 # keep partially transferred files
+      "--partial-dir=${\PARTIAL}", # put a partially transferred file into DIR
+      ;
 
     # inject nice values on the remote
     if ( my @remote_nice = $self->remote_nice ) {
@@ -119,27 +129,27 @@ sub build_rsync_command ($self) {
     }
 
     # split the destination into host and path
-    my $dst = pop @args;    # this might be wrong (see above)
-    my ( $dst_host, $dst_path ) = split /:/, $dst, 2;
-    if ( !$dst_path ) {
-        $self->usage_error("Invalid destination '$dst'")
-          if !$dst_host;
-        $dst_path = qx{ssh $dst_host pwd};
+    my $dest = pop @args;    # this might be wrong (see BIG ASSUMPTON above)
+    my ( $dest_host, $dest_path ) = split /:/, $dest, 2;
+    if ( !$dest_path ) {
+        $self->usage_error("Invalid destination '$dest'")
+          if !$dest_host;
+        $dest_path = qx{ssh $dest_host pwd};
     }
-    $dst_path =~ s{/+\z}{};
+    $dest_path =~ s{/+\z}{};
 
-    # extract relevant values from from $dst_path
+    # extract relevant values from $dest_path
     my ( $base_dir, $name ) = do {
-        my @segments = split m{/}, $dst_path;
+        my @segments = split m{/}, $dest_path;
         my $last     = pop @segments;
         ( join( '/', @segments ), $last );
     };
 
     # find which other directories to link to with --link-dest
     my ( @backups, @others );
-    @backups = $self->list_backups( $dst_host, $dst_path );
+    @backups = $self->list_backups( $dest_host, $dest_path );
     @others  = grep !m{/$name/},
-      $self->list_backups( $dst_host, $base_dir, "*/${\BACKUP_GLOB}" )
+      $self->list_backups( $dest_host, $base_dir, "*/${\BACKUP_GLOB}" )
       if $options->{others};
 
     # link-dest option: merge self with others, sorted by date
@@ -160,14 +170,23 @@ sub build_rsync_command ($self) {
     # build the link-dest option
     push @rsync_opts, map "--link-dest=$_", @link_dest;
 
-
-    # build the actual command-line to run:
-    my $today = strftime "%Y-%m-%d", localtime;
-    return ( $self->local_nice, rsync => @args, "$dst/$today", @rsync_opts );
+    # return the arguments and options for rsync
+    return ( \@args, $dest, \@rsync_opts );
 }
 
 sub call ( $self ) {
-    return $self->run_command( $self->build_rsync_command );
+    my $today = strftime "%Y-%m-%d", localtime;
+    my ( $src, $dest, $opts ) = $self->build_rsync_src_dest_opts;
+
+    # build the actual command-line and run it
+    my $in_progress = join '/', $dest, $today;
+    my $status = $self->run_command(
+        $self->local_nice,                 # optional nice
+        rsync => @$src => $in_progress,    # rsync SRC... DEST
+        @$opts                             # options
+    );
+
+    return $status;
 }
 
 1;
