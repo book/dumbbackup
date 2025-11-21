@@ -14,6 +14,7 @@ my $by_date = \&by_date;
 
 use constant MAX_LINK_DEST => 20;
 use constant PARTIAL       => '.partial';
+use constant IN_PROGRESS   => '.inprogress';
 use constant BACKUP_GLOB   => join '-',
   '{19,20}[0-9][0-9]',           # year
   '{0[1-9],1[0-2]}',             # month
@@ -175,16 +176,40 @@ sub build_rsync_src_dest_opts ($self) {
 }
 
 sub call ( $self ) {
-    my $today = strftime "%Y-%m-%d", localtime;
+    my $options = $self->options;
+    my $today   = strftime "%Y-%m-%d", localtime;
     my ( $src, $dest, $opts ) = $self->build_rsync_src_dest_opts;
 
     # build the actual command-line and run it
-    my $in_progress = join '/', $dest, $today;
+    my $in_progress = join '/', $dest, IN_PROGRESS;
     my $status = $self->run_command(
-        $self->local_nice,                 # optional nice
+        $self->local_nice,    # optional nice
         rsync => @$src => $in_progress,    # rsync SRC... DEST
         @$opts                             # options
     );
+
+    # once the backup succeeds, move it to its final destination
+    if (
+        $status == 0        # Success
+        || $status == 24    # Partial transfer due to vanished source files
+      )
+    {
+        # WARNING: this does not work if the destination already exists!
+        if ( $dest =~ /:/ ) {
+            my ( $dest_host, $dest_path ) = split /:/, $dest, 2;
+            $status = $self->run_command(
+                ssh => $dest_host,
+                mv  => "$dest_path/${\IN_PROGRESS}" => "$dest_path/$today"
+            );
+        }
+        else {
+            say "# mv '$in_progress' '$dest/$today'"
+              if $options->{dry_run} || $options->{verbose};
+            rename $in_progress, "$dest/$today"
+              or die "Can't rename $in_progress to $dest/$today: $!"
+              unless $self->options->{dry_run};
+        }
+    }
 
     return $status;
 }
