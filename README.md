@@ -57,6 +57,11 @@ executable:
   Thanks to `rsync`, the data transfered for backing up an unmodified
   file is minimal.
 
+* **Atomic**
+
+  Only complete backups are stored. Any incomplete backup will be left
+  around to be picked up by the next backup run at a later point in time.
+
 * **Remote backups**
 
   The versatility of `dumbbackup` comes from `rsync`:
@@ -110,23 +115,27 @@ executable:
 
 ## Backup
 
-To backup a host (named `zlonk` in the server's `/root/.ssh/config`)
-into the server in the `/backups/zlonk` directory, simply run:
+To fully backup a host (named `zlonk` in the server's `/root/.ssh/config`)
+into the server in the `/backups/zlonk` directory, running `rsync` with
+the `--verbose` option, simply type:
 
-    dumbbackup                    \
-        --target root@zlonk       \
-        --store /backups/zlonk    \
-        -- /
+    dumbbackup run root@zlonk:/ /backups/zlonk -- --verbose
 
-The backup granularity is daily, which means each backup is stored in
-a directory named after the local date of the host that ran the
-command, in the `strftime` format `%Y-%m-%d` (or `YYYY-MM-DD` for
-regular people).
+Backups are atomic, meaning they are built in a temporary directory
+(named `.progress`) and only copied to their final location when the
+`rsync` process exits with a success status. Once completed, each
+backup is stored in a directory named after the local date of the host
+that ran the command, in the `strftime` format `%Y-%m-%d_%H-%M-%S`
+(or `YYYY-MM-DD_hh-mm-ss` for regular people).
 
-Running the tool several times a day will overwrite files that have been
-updated (and not delete any by default). It also help ensure that if a
-backup failed (e.g. network failure), the next run will catch anything
-that was missed in the previous run.
+Running the tool several times a day will ensure that if a backup failed
+(e.g. network failure), the next run will catch anything that was missed
+in the previous run. If all of them are successful, there might be multiple
+directories for the same day, but taking up a very small amount of extra
+space, thanks to the hard links.
+
+Running `backup cleanup` will apply the retention policy, and keep a
+single backup for any given day. (See below.)
 
 It is recommended to run the tool as `root`, so that *all* files can be
 backed up.
@@ -222,6 +231,10 @@ This ensures that even if backups are skipped, we keep a spread of
 backups that is denser when closer to the present day.
 
 ### Example
+
+(Note that the reports below only shows backups in the `YYYY-MM-DD`
+format, to save some horizontal space. The backup directories actually
+contain the time too.)
 
 Assuming the following backups have been saved for a given host,
 and none have been cleaned up yet:
@@ -486,6 +499,10 @@ monthly and quartely backup).
   This allows a role to add support for specific options which, combined
   with clever use of lazy attributes and method modifiers, can easily
   provide a shared set of options across subcommands.
+
+  Ensure backups are only stored when the `rsync` command
+  succeeds (this atomic operation is heavily inspired by
+  [linux-timemachine](https://github.com/cytopia/linux-timemachine)).
 
 # See also
 
