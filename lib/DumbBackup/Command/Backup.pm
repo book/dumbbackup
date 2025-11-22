@@ -177,7 +177,7 @@ sub build_rsync_src_dest_opts ($self) {
 
 sub call ( $self ) {
     my $options = $self->options;
-    my $today   = strftime "%Y-%m-%d", localtime;
+    my $today   = strftime "%Y-%m-%d_%H-%M-%S", localtime;
     my ( $src, $dest, $opts ) = $self->build_rsync_src_dest_opts;
 
     # build the actual command-line and run it

@@ -5,6 +5,7 @@ use utf8;
 
 use POSIX            qw( strftime ceil );
 use List::Util       qw( max );
+use File::Basename   qw( basename );
 
 use Moo;
 use namespace::clean;
@@ -16,6 +17,15 @@ with
   'RYO::WithSystemCommands',
   'DumbBackup::Nice',
   ;
+
+use constant BACKUP_RX => qr{
+    (?:\A|/)                            # beginning of string / basename
+    \b([0-9]{4})-([0-9]{2})-([0-9]{2})  # YYYY-MM-DD
+    (?:_+                               # underscore(s)
+       ([0-9]{2})-([0-9]{2})-([0-9]{2}) # hh-mm-ss
+    )?                                  # (optional)
+    \z                                  # end of string
+}x;
 
 sub options_spec {
     qw(
@@ -62,10 +72,10 @@ my %bucket_fmt = (
 sub _buckets_for (@dates) {
     my %bucket;
     for my $date ( sort @dates ) {
-        my ( $y, $m, $d ) = $date =~ /\b([0-9]{4})-([0-9]{2})-([0-9]{2})\z/;
+        my ( $y, $m, $d, $H, $M, $S ) = $date =~ BACKUP_RX;
         for my $period (@periods) {
             my $key =
-              strftime( $bucket_fmt{$period}, 0, 0, 0, $d, $m - 1, $y - 1900 );
+              strftime( $bucket_fmt{$period}, $S // 0, $M //0 , $H//0, $d, $m - 1, $y - 1900 );
             $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
             push $bucket{$period}{$key}->@*, $date;
         }
@@ -110,20 +120,22 @@ sub retention_report ( $self, @backups ) {
 
     # compute the format for each column of the report
     my @headers = (
+        "backup",
         "$options->{days} daily",
         "$options->{weeks} weekly",
         "$options->{months} monthly",
         "$options->{quarters} quarterly",
         "$options->{years} yearly",
     );
-    my @fmt = map "%-${_}s",
+    my @fmt = map "%-${_}s", max( map length basename($_), @backups ),
       map max( 2 + length( $tag{ $backups[0] // '' }{ $periods[$_] } // '' ),
-        length $headers[$_] ), 0 .. $#periods;
+        length $headers[ $_ + 1 ] ),
+      0 .. $#periods;
 
     # compute the report header
     my $report = sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
     $report .= '─'
-      . join( '─┼─', map '─' x length( sprintf $fmt[$_], ' ' ), 0 .. $#periods )
+      . join( '─┼─', map '─' x length( sprintf $_, ' ' ), @fmt )
       . "─\n";
 
     # compute the actual report
@@ -131,8 +143,9 @@ sub retention_report ( $self, @backups ) {
         $report .= ' '
           . join(
             " │ ",
+            sprintf( $fmt[0], basename($date) ),
             map sprintf(
-                $fmt[$_],
+                $fmt[ $_ + 1 ],
                 $tag{$date}{ $periods[$_] }
                   . ( $keep{ $periods[$_] }{$date} ? ' *' : '  ' )
             ),
@@ -151,7 +164,7 @@ sub call ($self) {
     my $options = $self->options;
 
     # compute the list of backups
-    my @backups = grep -d, glob "$options->{store}/????-??-??";
+    my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$options->{store}/*";
 
     # print a report if asked for one
     if ( $options->{report} ) {
