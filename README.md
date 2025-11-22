@@ -500,9 +500,13 @@ monthly and quartely backup).
   with clever use of lazy attributes and method modifiers, can easily
   provide a shared set of options across subcommands.
 
-  Ensure backups are only stored when the `rsync` command
-  succeeds (this atomic operation is heavily inspired by
-  [linux-timemachine](https://github.com/cytopia/linux-timemachine)).
+  While re-working the `dumbbackup backup` command, I became aware of a
+  number of shortcomings in the generated command-line. I took inspiration
+  from [linux-timemachine](https://github.com/cytopia/linux-timemachine)
+  to fix them, and improve `dumbbackup`. One of the improvements was to
+  ensure backups are only in their final destination when the `rsync`
+  command succeeds, so that no incomplete backups risk polluting the
+  history.
 
 # See also
 
