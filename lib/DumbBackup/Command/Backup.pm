@@ -131,12 +131,16 @@ sub build_rsync_src_dest_opts ($self) {
 
     # split the destination into host and path
     my $dest = pop @args;    # this might be wrong (see BIG ASSUMPTON above)
-    my ( $dest_host, $dest_path ) = split /:/, $dest, 2;
-    if ( !$dest_path ) {
-        $self->usage_error("Invalid destination '$dest'")
-          if !$dest_host;
-        $dest_path = qx{ssh $dest_host pwd};
+    my ( $dest_host, $dest_path );
+    if ( $dest =~ /:/ ) {
+        ( $dest_host, $dest_path ) = split /:/, $dest, 2;
+        if ( !$dest_path ) {
+            $self->usage_error("Invalid destination '$dest'")
+              if !$dest_host;
+            $dest_path = qx{ssh $dest_host pwd};
+        }
     }
+    else { $dest_path = $dest }
     $dest_path =~ s{/+\z}{};
 
     # extract relevant values from $dest_path
