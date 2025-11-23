@@ -52,6 +52,12 @@ sub list_backups ( $self, $host, $path, $glob = BACKUP_GLOB ) {
 
     # restore STDERR
     open STDERR, '>&', $stderr;
+
+    # From the rsync manual page about --link-dest:
+    # > If DIR is a relative path, it is relative to the destination directory.
+    @backups = map "../../$_", @backups
+      if substr( $path, 0, 1 ) ne '/';
+
     return @backups;
 }
 
