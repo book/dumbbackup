@@ -5,7 +5,7 @@ use warnings;
 use POSIX            qw( strftime ceil );
 use List::Util       qw( max );
 
-use DumbBackup::Constants qw( BACKUP_RX @PERIODS );
+use DumbBackup::Constants qw( BACKUP_RX_CAPTURES @PERIODS );
 
 use Moo::Role;
 use namespace::clean;
@@ -52,10 +52,11 @@ my %bucket_fmt = (
 sub _buckets_for (@dates) {
     my %bucket;
     for my $date ( sort @dates ) {
-        my ( $y, $m, $d, $H, $M, $S ) = $date =~ BACKUP_RX;
+        my ( $y, $m, $d, $H, $M, $S ) = $date =~ BACKUP_RX_CAPTURES;
         for my $period (@PERIODS) {
             my $key =
-              strftime( $bucket_fmt{$period}, $S // 0, $M //0 , $H//0, $d, $m - 1, $y - 1900 );
+              strftime( $bucket_fmt{$period}, $S // 0, $M // 0, $H // 0, $d,
+                $m - 1, $y - 1900 );
             $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
             push $bucket{$period}{$key}->@*, $date;
         }
