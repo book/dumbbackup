@@ -7,6 +7,7 @@ use Exporter 'import';
 our @EXPORT_OK = qw(
     BACKUP_RX
     BACKUP_RX_CAPTURES
+    BACKUP_GLOB
     @PERIODS
 );
 
@@ -27,6 +28,11 @@ use constant BACKUP_RX_CAPTURES => qr{
     )?                                  # (optional)
     \z                                  # end of string
 }x;
+
+use constant BACKUP_GLOB   => join '',
+  '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]', # YYYY-MM-DD
+  '{,_[0-9][0-9]-[0-9][0-9]-[0-9][0-9]}',       #  _hh-mm-ss (optional)
+  ;
 
 our @PERIODS = qw( days weeks months quarters years );
 
