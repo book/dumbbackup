@@ -137,7 +137,16 @@ sub pack_as {
     my %prereqs = scan( $unpacked, @extras );
     my ( $shebang, $script ) = $packer->load_main_script($unpacked);
     open my $fh, '>', $packed or die "Can't open $packed for writing: $!";
-    print $fh join "\n", $shebang, $packer->fatpack_code( \%prereqs ), $script;
+    print $fh join "\n", $shebang, <<~ 'WARNING',
+    #
+    # WARNING: THIS SCRIPT IS AUTO-GENERATED.
+    #
+    # If you want to debug it or submit patches,
+    # please check the original source at:
+    # https://github.com/book/dumbbackup
+    #
+    WARNING
+    $packer->fatpack_code( \%prereqs ), $script;
     close $fh;
     chmod 0755, $packed;
 }

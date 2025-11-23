@@ -2,6 +2,8 @@ package DumbBackup::Sort;
 use 5.024;
 use warnings;
 
+use DumbBackup::Constants qw( BACKUP_RX );
+
 use Exporter qw( import );
 
 our @EXPORT_OK = qw( by_date );
@@ -10,7 +12,7 @@ our @EXPORT_OK = qw( by_date );
 sub by_date {
     no strict 'refs';
     my $pkg = caller;
-    my ( $A, $B ) = map /([0-9]{4}(?:-[0-9]{2}(?:-[0-9]{2})?)?)\z/, ${"$pkg\::a"}, ${"$pkg\::b"};
+    my ( $A, $B ) = map $_ =~ /(${\BACKUP_RX})/, ${"$pkg\::a"}, ${"$pkg\::b"};
     return $A cmp $B;
 }
 

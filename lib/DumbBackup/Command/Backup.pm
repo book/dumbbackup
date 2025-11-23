@@ -8,6 +8,7 @@ use Fcntl            qw( :flock );
 use List::Util       qw( min );
 use Text::ParseWords qw( shellwords );
 use DumbBackup::Sort qw( by_date );
+use DumbBackup::Constants qw( BACKUP_GLOB );
 
 # force compile-time resolution, see namespace::clean documentation
 my $by_date = \&by_date;
@@ -15,11 +16,6 @@ my $by_date = \&by_date;
 use constant MAX_LINK_DEST => 20;
 use constant PARTIAL       => '.partial';
 use constant IN_PROGRESS   => '.inprogress';
-use constant BACKUP_GLOB   => join '-',
-  '{19,20}[0-9][0-9]',           # year
-  '{0[1-9],1[0-2]}',             # month
-  '{0[1-9],[12][0-9],3[01]}',    # day
-  ;
 
 use Moo;
 use namespace::clean;
@@ -45,7 +41,7 @@ sub options_defaults { }
 
 sub list_backups ( $self, $host, $path, $glob = BACKUP_GLOB ) {
 
-    # temporarily close STDERR to quiet glob errors
+    # temporarily close STDERR to quiet ls errors
     open my $stderr, '>&', \*STDERR;
     close STDERR;
 
@@ -56,6 +52,12 @@ sub list_backups ( $self, $host, $path, $glob = BACKUP_GLOB ) {
 
     # restore STDERR
     open STDERR, '>&', $stderr;
+
+    # From the rsync manual page about --link-dest:
+    # > If DIR is a relative path, it is relative to the destination directory.
+    @backups = map "../../$_", @backups
+      if substr( $path, 0, 1 ) ne '/';
+
     return @backups;
 }
 
