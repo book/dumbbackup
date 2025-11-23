@@ -4,7 +4,15 @@ use Test::More;
 
 use Time::Local qw( timegm );
 use POSIX qw( strftime );
-use DumbBackup::Command::Cleanup;
+
+package DumbBackup::Test {
+    use Moo;
+    with
+      'RYO::Command',
+      'DumbBackup::RetentionPolicy';
+    sub options_spec     { }
+    sub options_defaults { }
+}
 
 # test bucket computation
 my @bucket_tests = (
@@ -53,7 +61,7 @@ while ( my ( $date, $buckets ) = splice @bucket_tests, 0, 2 ) {
       for keys %$buckets;
 }
 
-is_deeply( DumbBackup::Command::Cleanup::_buckets_for( @dates ),
+is_deeply( DumbBackup::Test::_buckets_for( @dates ),
     $expected_buckets, '_buckets_for' );
 
 # build 2 years worth of backups starting from 2022-01-01
@@ -66,7 +74,7 @@ while ( my $date = strftime( "%Y-%m-%d", gmtime($t) ) ) {
 continue { $t += 86400; }
 
 # result with default arguments
-my $db   = DumbBackup::Command::Cleanup->new( arguments => [qw( --store . )] );
+my $db   = DumbBackup::Test->new;
 my @kept = sort keys $db->retention_hash(@backups)->%*;
 is_deeply(
     \@kept,
