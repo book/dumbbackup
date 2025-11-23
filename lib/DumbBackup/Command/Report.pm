@@ -23,7 +23,7 @@ sub options_spec {
 
 sub options_defaults { }
 
-sub retention_report ( $self, @backups ) {
+sub retention_report ( $self, $store, @backups ) {
     my $options = $self->options;
     my $bucket  = _buckets_for(@backups);
 
@@ -59,7 +59,10 @@ sub retention_report ( $self, @backups ) {
       0 .. $#PERIODS;
 
     # compute the report header
-    my $report = sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
+    my $report = '─'
+      . join( '─┬─', map '─' x length( sprintf $_, ' ' ), @fmt )
+      . "─\n";
+    $report .= sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
     $report .= '─'
       . join( '─┼─', map '─' x length( sprintf $_, ' ' ), @fmt )
       . "─\n";
@@ -80,10 +83,10 @@ sub retention_report ( $self, @backups ) {
     }
 
     # strike backups to be removed with COMBINING LONG STROKE OVERLAY
-    $report =~ s/^([^*y┼]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+    $report =~ s/^([^*y┼┬]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
       if $options->{strike};
 
-    return $report;
+    return " $store\n$report";
 }
 
 sub call ( $self ) {
@@ -92,7 +95,7 @@ sub call ( $self ) {
     binmode( STDOUT, ':utf8' );
     for my $store ( $self->arguments->@* ) {
         my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
-        print $self->retention_report(@backups)
+        print $self->retention_report( $store, @backups ), "\n"
           if @backups;
     }
 
