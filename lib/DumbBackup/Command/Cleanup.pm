@@ -22,11 +22,7 @@ with
   ;
 
 sub options_spec {
-    qw(
-      store=s
-      report
-      strike|strikeout|stroke
-    );
+    qw( store=s );
 }
 
 sub options_defaults { }
@@ -37,81 +33,11 @@ sub validate_options ( $self) {
       unless $options->{store};
 }
 
-sub retention_report ( $self, @backups ) {
-    my $options = $self->options;
-    my $bucket  = _buckets_for(@backups);
-
-    # compte the bucket for each period for all backups
-    my %tag;
-    for my $period (@PERIODS) {
-        for my $name ( keys $bucket->{$period}->%* ) {
-            $tag{$_}{$period} = $name for $bucket->{$period}{$name}->@*;
-        }
-    }
-
-    # compute which backup is kept for every period bucket
-    my %keep;
-    for my $period (@PERIODS) {
-        my @keep = reverse sort keys $bucket->{$period}->%*;
-        splice @keep, $options->{$period}
-          if $options->{$period} >= 0;    # -1 means keep all
-        $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
-    }
-
-    # compute the format for each column of the report
-    my @headers = (
-        "backup",
-        "$options->{days} daily",
-        "$options->{weeks} weekly",
-        "$options->{months} monthly",
-        "$options->{quarters} quarterly",
-        "$options->{years} yearly",
-    );
-    my @fmt = map "%-${_}s", max( map length basename($_), @backups ),
-      map max( 2 + length( $tag{ $backups[0] // '' }{ $PERIODS[$_] } // '' ),
-        length $headers[ $_ + 1 ] ),
-      0 .. $#PERIODS;
-
-    # compute the report header
-    my $report = sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
-    $report .= '─'
-      . join( '─┼─', map '─' x length( sprintf $_, ' ' ), @fmt )
-      . "─\n";
-
-    # compute the actual report
-    for my $date ( sort @backups ) {
-        $report .= ' '
-          . join(
-            " │ ",
-            sprintf( $fmt[0], basename($date) ),
-            map sprintf(
-                $fmt[ $_ + 1 ],
-                $tag{$date}{ $PERIODS[$_] }
-                  . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' )
-            ),
-            0 .. $#PERIODS
-          ) . " \n";
-    }
-
-    # strike backups to be removed with COMBINING LONG STROKE OVERLAY
-    $report =~ s/^([^*y┼]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
-      if $options->{strike};
-
-    return $report;
-}
-
 sub call ($self) {
     my $options = $self->options;
 
     # compute the list of backups
     my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$options->{store}/*";
-
-    # print a report if asked for one
-    if ( $options->{report} ) {
-        binmode( STDOUT, ':utf8' );
-        print $self->retention_report(@backups);
-        return;    # don't do anything else
-    }
 
     # remove everything we don't want to keep
     my $keep       = $self->retention_hash(@backups);
@@ -170,11 +96,6 @@ These options help define the retention policy:
 All options above accept the corresponding aliases.
 E.g., I<--days> and I<--daily> are valid aliases for I<--keep-days>.
 
-=head3 Reporting options
-
-    --report               print the retention report for the store
-    --strike               strike the backups to be deleted from the report
-
 =head1 DESCRIPTION
 
 C<dumbbackup cleanup> removes from the given store the backups that
@@ -208,36 +129,6 @@ The default retention policy is to keep:
 That is to say, enough daily backups to cover a week, enough weekly
 backups to cover a month, enough monthly backups to cover a quarter,
 and enough quartely backups to cover a year. And 10 yearly backups.
-
-=head2 Retention reports
-
-The I<--report> option will print a retention report on all the backups
-found in the store.
-
-The table header summarizes the retention policy.
-
-     7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
-    ──────────────────┼───────────┼───────────┼─────────────┼───────────
-     2024-03-31 Sun   │ 2024-13   │ 2024-03   │ 2024-1 *    │ 2024      
-     2024-06-30 Sun   │ 2024-26   │ 2024-06   │ 2024-2 *    │ 2024      
-     2024-09-30 Mon   │ 2024-40   │ 2024-09   │ 2024-3 *    │ 2024      
-     2024-10-31 Thu   │ 2024-44   │ 2024-10 * │ 2024-4      │ 2024      
-     2024-11-30 Sat   │ 2024-48   │ 2024-11 * │ 2024-4      │ 2024      
-     2024-12-08 Sun   │ 2024-49 * │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-15 Sun   │ 2024-50 * │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-22 Sun   │ 2024-51 * │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-24 Thu   │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-25 Wed * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-26 Thu * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-27 Fri * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-28 Sat * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-29 Sun * │ 2024-52 * │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-30 Mon * │ 2024-53   │ 2024-12   │ 2024-4      │ 2024      
-     2024-12-31 Tue * │ 2024-53 * │ 2024-12 * │ 2024-4 *    │ 2024 *    
-
-The backups to be I<kept> are marked with a C<*> in the generated table.
-Anything not marked as retained is going to be deleted when the actual
-command is run.
 
 =head1 AUTHOR
 

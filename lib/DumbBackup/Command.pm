@@ -23,6 +23,7 @@ sub aliases {
         save    => 'backup',
         cleanup => 'cleanup',
         keep    => 'cleanup',
+        report  => 'report',
         help    => 'help',
         manual  => 'help',
     );
@@ -43,7 +44,8 @@ dumbbackup - Better dumb backups now, than perfect backups too late.
 Commands for backup management:
 
   run     - Perform a backup
-  keep    - Apply the retention policy
+  cleanup - Apply the retention policy
+  report  - Show a report on existing backups
 
 Miscellaneous command:
 
