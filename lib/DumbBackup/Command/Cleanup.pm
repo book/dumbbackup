@@ -7,6 +7,8 @@ use POSIX            qw( strftime ceil );
 use List::Util       qw( max );
 use File::Basename   qw( basename );
 
+use DumbBackup::Constants qw( BACKUP_RX );
+
 use Moo;
 use namespace::clean;
 
@@ -17,15 +19,6 @@ with
   'RYO::WithSystemCommands',
   'DumbBackup::Nice',
   ;
-
-use constant BACKUP_RX => qr{
-    (?:\A|/)                            # beginning of string / basename
-    \b([0-9]{4})-([0-9]{2})-([0-9]{2})  # YYYY-MM-DD
-    (?:_+                               # underscore(s)
-       ([0-9]{2})-([0-9]{2})-([0-9]{2}) # hh-mm-ss
-    )?                                  # (optional)
-    \z                                  # end of string
-}x;
 
 sub options_spec {
     qw(
