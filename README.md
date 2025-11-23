@@ -228,7 +228,7 @@ the default):
         --months    3    \
         --quarters  4    \
         --years    10    \
-        --store   ...
+        ...
 
 This ensures that even if backups are skipped, we keep a spread of
 backups that is denser when closer to the present day.
@@ -251,7 +251,7 @@ and none have been cleaned up yet:
 
 Using the default retention policy, one can run the following command:
 
-    dumbbackup keep --store /backups/zlonk --report
+    dumbbackup report /backups/zlonk
 
 to produce a table of all the backups that exist for a given target
 and their corresponding buckets:
@@ -302,7 +302,7 @@ command is run.
 The actual deletions can be verified with:
 
 ```
-$ dumbbackup --store /backups/zlonk --dry-run
+$ dumbbackup cleanup /backups/zlonk --dry-run
 # rm -rf /backups/zlonk/2019-10-11
 # rm -rf /backups/zlonk/2019-11-13
 # rm -rf /backups/zlonk/2019-11-28
