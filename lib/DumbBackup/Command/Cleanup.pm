@@ -62,7 +62,7 @@ sub validate_options ( $self) {
 my @periods    = qw( days weeks months quarters years );
 my %bucket_fmt = (
     days     => '%Y-%m-%d %a',
-    weeks    => '%Y-%W',         # week starts on Monday
+    weeks    => '%G-%V',         # week starts on Monday
     months   => '%Y-%m',
     quarters => '%Y-%Q',         # non-standard format!
     years    => '%Y',

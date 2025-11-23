@@ -24,7 +24,7 @@ my @bucket_tests = (
     },
     '2023-01-01' => {
         days     => '2023-01-01 Sun',
-        weeks    => '2023-00',
+        weeks    => '2022-52',
         months   => '2023-01',
         quarters => '2023-1',
         years    => '2023',
@@ -149,6 +149,48 @@ is_deeply(
         '2022-03-02',
     ],
     "cleanup example backups with default arguments"
+);
+
+# %Y-%W has issues, as it splits one Mon-Sun week
+# into two Mon-Tue and Wed-Sun weeks
+# %G-%V has both in the same week
+is_deeply(
+    [
+        sort keys $db->retention_hash(
+            '2024-11-30',    # week 2024-48, Sat
+            '2024-12-08',    # week 2024-49, Sun
+            '2024-12-15',    # week 2024-50, Sun
+            '2024-12-22',    # week 2024-51, Sun
+            '2024-12-28',    # week 2024-52, Sat
+            '2024-12-29',    # week 2024-52, Sun
+            '2024-12-30',    # week 2025-01, Mon
+            '2024-12-31',    # week 2025-01, Tue
+            '2025-01-01',    # week 2025-01, Wed
+            '2025-01-02',    # week 2025-01, Thu
+            '2025-01-03',    # week 2025-01, Fri, last daily
+            '2025-01-04',    # week 2025-01, Sat
+            '2025-01-05',    # week 2025-01, Sun
+            '2025-01-06',    # week 2025-02, Mon
+            '2025-01-07',    # week 2025-02, Tue
+            '2025-01-08',    # week 2025-02, Wed
+            '2025-01-09',    # week 2025-02, Thu
+        )->%*
+    ],
+    [
+        '2024-11-30',    # monthly 3
+        '2024-12-15',    # weekly 5
+        '2024-12-22',    # weekly 4
+        '2024-12-29',    # weekly 3
+        '2024-12-31',    # monthly 2, quarterly 2, yearly 2
+        '2025-01-03',    # daily 7
+        '2025-01-04',    # daily 6
+        '2025-01-05',    # daily 5, weekly 2
+        '2025-01-06',    # daily 4
+        '2025-01-07',    # daily 3
+        '2025-01-08',    # daily 2
+        '2025-01-09',    # daily 1, weekly 1, monthly 1, quarterly 1, yearly 1
+    ],
+    '2024-12-31 and 2025-01-01 are in the same week'
 );
 
 done_testing;
