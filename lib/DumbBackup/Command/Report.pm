@@ -18,7 +18,10 @@ with
   ;
 
 sub options_spec {
-    qw( strike|strikeout|stroke );
+    qw(
+      strike|strikeout|stroke
+      show_backups|show-backups|backups!
+    );
 }
 
 sub options_defaults { }
@@ -46,17 +49,24 @@ sub retention_report ( $self, $store, @backups ) {
 
     # compute the format for each column of the report
     my @headers = (
-        "backup",
         "$options->{days} daily",
         "$options->{weeks} weekly",
         "$options->{months} monthly",
         "$options->{quarters} quarterly",
         "$options->{years} yearly",
     );
-    my @fmt = map "%-${_}s", max( map length basename($_), @backups ),
+    my @fmt = map "%-${_}s",
       map max( 2 + length( $tag{ $backups[0] // '' }{ $PERIODS[$_] } // '' ),
-        length $headers[ $_ + 1 ] ),
+        length $headers[$_] ),
       0 .. $#PERIODS;
+
+    # shall we show the "backup" column?
+    my $show_backups = !!$options->{show_backups};
+    if ($show_backups) {
+        unshift @headers, 'backup';
+        unshift @fmt,     sprintf '%%-%ds',
+          max( map length basename($_), @backups );
+    }
 
     # compute the report header
     my $report = '─'
@@ -72,9 +82,9 @@ sub retention_report ( $self, $store, @backups ) {
         $report .= ' '
           . join(
             " │ ",
-            sprintf( $fmt[0], basename($date) ),
+            ( sprintf( $fmt[0], basename($date) ) ) x $show_backups,
             map sprintf(
-                $fmt[ $_ + 1 ],
+                $fmt[ $_ + $show_backups ],
                 $tag{$date}{ $PERIODS[$_] }
                   . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' )
             ),
@@ -121,6 +131,7 @@ dumbbackup report - Show report on stored backups, according to the retention po
 =head3 Reporting options
 
     --strike               strike out the backups to be deleted from the report
+    --show-backups         show an additional column with the backup directory name
 
 =head3 Retention policy options
 
@@ -142,6 +153,8 @@ in the given stores.
 
 The table header summarizes the retention policy.
 
+     host directory
+    ──────────────────┬───────────┬───────────┬─────────────┬───────────
      7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
     ──────────────────┼───────────┼───────────┼─────────────┼───────────
      2024-03-31 Sun   │ 2024-13   │ 2024-03   │ 2024-1 *    │ 2024      
@@ -158,12 +171,18 @@ The table header summarizes the retention policy.
      2024-12-27 Fri * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
      2024-12-28 Sat * │ 2024-52   │ 2024-12   │ 2024-4      │ 2024      
      2024-12-29 Sun * │ 2024-52 * │ 2024-12   │ 2024-4      │ 2024      
+     2024-12-30 Mon   │ 2024-53   │ 2024-12   │ 2024-4      │ 2024      
      2024-12-30 Mon * │ 2024-53   │ 2024-12   │ 2024-4      │ 2024      
      2024-12-31 Tue * │ 2024-53 * │ 2024-12 * │ 2024-4 *    │ 2024 *    
 
 The backups to be I<kept> are marked with a C<*> in the generated table.
 Anything not marked as retained is going to be deleted when the
 B<dumbbackup cleanup> command is run.
+
+The backup directories are of the form C<YYYY-MM-DD_hh-mm-ss>. When the
+"backup" column is not shown (the default), the same day can show up
+multiple times in the "daily" column, if multiple backups exist for
+that day.
 
 =head1 AUTHOR
 
