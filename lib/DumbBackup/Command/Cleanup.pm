@@ -7,7 +7,7 @@ use POSIX            qw( strftime ceil );
 use List::Util       qw( max );
 use File::Basename   qw( basename );
 
-use DumbBackup::Constants qw( BACKUP_RX );
+use DumbBackup::Constants qw( BACKUP_RX @PERIODS );
 
 use Moo;
 use namespace::clean;
@@ -17,76 +17,24 @@ use experimental 'signatures';
 with
   'RYO::Command',
   'RYO::WithSystemCommands',
+  'DumbBackup::RetentionPolicy',
   'DumbBackup::Nice',
   ;
 
 sub options_spec {
     qw(
       store=s
-      days|keep-days|daily=i
-      weeks|keep-weeks|weekly=i
-      months|keep-months|monthly=i
-      quarters|keep-quarters|quarterly=i
-      years|keep-years|yearly=i
       report
       strike|strikeout|stroke
     );
 }
 
-# default to keep is:
-# enough of one periodicity to cover the enclosing periodicity
-sub options_defaults {
-    (
-        days     => 7,     # a week is 7 seven days
-        weeks    => 5,     # a month is 5 weeks (at most)
-        months   => 3,     # a quarter is 3 months
-        quarters => 4,     # a year is 4 quarters
-        years    => 10,    # could be anything
-    );
-}
+sub options_defaults { }
 
 sub validate_options ( $self) {
     my $options = $self->options;
     $self->usage_error('--store is required')
       unless $options->{store};
-}
-
-my @periods    = qw( days weeks months quarters years );
-my %bucket_fmt = (
-    days     => '%Y-%m-%d %a',
-    weeks    => '%G-%V',         # week starts on Monday
-    months   => '%Y-%m',
-    quarters => '%Y-%Q',         # non-standard format!
-    years    => '%Y',
-);
-
-# separate dates in the corresponding buckets
-sub _buckets_for (@dates) {
-    my %bucket;
-    for my $date ( sort @dates ) {
-        my ( $y, $m, $d, $H, $M, $S ) = $date =~ BACKUP_RX;
-        for my $period (@periods) {
-            my $key =
-              strftime( $bucket_fmt{$period}, $S // 0, $M //0 , $H//0, $d, $m - 1, $y - 1900 );
-            $key =~ s{\Q%Q\E}{ceil( $m / 3 )}e;    # %Q means quarter
-            push $bucket{$period}{$key}->@*, $date;
-        }
-    }
-    return \%bucket;
-}
-
-sub retention_hash ( $self, @backups ) {
-    my $options = $self->options;
-    my $bucket  = _buckets_for(@backups);
-    my %keep;
-    for my $period (@periods) {    # for a given periodicity
-        my @keep = reverse sort keys $bucket->{$period}->%*;  # grab all buckets
-        splice @keep, $options->{$period} # keep the requested number of buckets
-          if $options->{$period} >= 0;    # if any (negative means keep all)
-        $keep{ $bucket->{$period}{$_}[-1] }++   # then keep the most recent item
-          for @keep;                            # in each remaining bucket
-    }
-    return \%keep;
 }
 
 sub retention_report ( $self, @backups ) {
@@ -95,7 +43,7 @@ sub retention_report ( $self, @backups ) {
 
     # compte the bucket for each period for all backups
     my %tag;
-    for my $period (@periods) {
+    for my $period (@PERIODS) {
         for my $name ( keys $bucket->{$period}->%* ) {
             $tag{$_}{$period} = $name for $bucket->{$period}{$name}->@*;
         }
@@ -103,7 +51,7 @@ sub retention_report ( $self, @backups ) {
 
     # compute which backup is kept for every period bucket
     my %keep;
-    for my $period (@periods) {
+    for my $period (@PERIODS) {
         my @keep = reverse sort keys $bucket->{$period}->%*;
         splice @keep, $options->{$period}
           if $options->{$period} >= 0;    # -1 means keep all
@@ -120,9 +68,9 @@ sub retention_report ( $self, @backups ) {
         "$options->{years} yearly",
     );
     my @fmt = map "%-${_}s", max( map length basename($_), @backups ),
-      map max( 2 + length( $tag{ $backups[0] // '' }{ $periods[$_] } // '' ),
+      map max( 2 + length( $tag{ $backups[0] // '' }{ $PERIODS[$_] } // '' ),
         length $headers[ $_ + 1 ] ),
-      0 .. $#periods;
+      0 .. $#PERIODS;
 
     # compute the report header
     my $report = sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
@@ -138,10 +86,10 @@ sub retention_report ( $self, @backups ) {
             sprintf( $fmt[0], basename($date) ),
             map sprintf(
                 $fmt[ $_ + 1 ],
-                $tag{$date}{ $periods[$_] }
-                  . ( $keep{ $periods[$_] }{$date} ? ' *' : '  ' )
+                $tag{$date}{ $PERIODS[$_] }
+                  . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' )
             ),
-            0 .. $#periods
+            0 .. $#PERIODS
           ) . " \n";
     }
 

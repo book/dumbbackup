@@ -6,6 +6,7 @@ use Exporter 'import';
 
 our @EXPORT_OK = qw(
     BACKUP_RX
+    @PERIODS
 );
 
 use constant BACKUP_RX => qr{
@@ -16,5 +17,7 @@ use constant BACKUP_RX => qr{
     )?                                  # (optional)
     \z                                  # end of string
 }x;
+
+our @PERIODS = qw( days weeks months quarters years );
 
 1;
