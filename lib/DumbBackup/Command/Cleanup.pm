@@ -21,30 +21,28 @@ with
   'DumbBackup::Nice',
   ;
 
-sub options_spec {
-    qw( store=s );
-}
-
+sub options_spec     { }
 sub options_defaults { }
-
-sub validate_options ( $self) {
-    my $options = $self->options;
-    $self->usage_error('--store is required')
-      unless $options->{store};
-}
 
 sub call ($self) {
     my $options = $self->options;
 
-    # compute the list of backups
-    my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$options->{store}/*";
+    for my $store ( $self->arguments->@* ) {
 
-    # remove everything we don't want to keep
-    my $keep       = $self->retention_hash(@backups);
-    my @local_nice = $self->local_nice;
-    for my $bye ( grep !$keep->{$_}, @backups ) {
-        my @rm = ( @local_nice, rm => '-rf', ('-v')x!! $options->{verbose}, $bye );
-        $self->run_command(@rm);
+        # compute the list of backups
+        my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
+
+        # remove everything we don't want to keep
+        my $keep       = $self->retention_hash(@backups);
+        my @local_nice = $self->local_nice;
+        for my $bye ( grep !$keep->{$_}, @backups ) {
+            my @rm = (
+                @local_nice,
+                rm => '-rf',
+                ('-v') x !!$options->{verbose}, $bye
+            );
+            $self->run_command(@rm);
+        }
     }
 
 }
@@ -61,15 +59,11 @@ dumbbackup cleanup - Clean up old backups, according to the retention policy
 
 =head1 SYNOPSIS
 
-  dumbbackup cleanup [options]
+  dumbbackup cleanup [options] DIR...
 
 Aliases: C<cleanup>, C<keep>.
 
 =head2 OPTIONS
-
-=head3 Required options
-
-    --store <directory>    the backup store to cleanup
 
 =head3 Removal options
 
@@ -98,11 +92,11 @@ E.g., I<--days> and I<--daily> are valid aliases for I<--keep-days>.
 
 =head1 DESCRIPTION
 
-C<dumbbackup cleanup> removes from the given store the backups that
+C<dumbbackup cleanup> removes from the given stores the backups that
 are not protected by the retention policy.
 
-This command will remove the backups, unless it's passed on of the
-I<--dry-run> or I<--report> options.
+This command will remove the backups, unless it's passed the I<--dry-run>
+option.
 
 =head2 Retention policy
 
