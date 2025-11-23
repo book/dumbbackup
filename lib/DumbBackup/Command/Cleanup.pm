@@ -35,7 +35,6 @@ sub options_spec {
       months|keep-months|monthly=i
       quarters|keep-quarters|quarterly=i
       years|keep-years|yearly=i
-      dry_run|dry-run       verbose
       report
       strike|strikeout|stroke
     );
