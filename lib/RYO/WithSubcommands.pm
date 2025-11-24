@@ -57,7 +57,7 @@ sub resolve_subcommand ( $self, $command ) {
 
 sub call ($self) {
     my $command = shift $self->arguments->@*;
-    exit $self->resolve_subcommand($command)->new(
+    return $self->resolve_subcommand($command)->new(
         parent    => $self,
         command   => $self->find_candidate($command) // $command,
         arguments => [ $self->arguments->@* ],
