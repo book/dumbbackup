@@ -20,6 +20,13 @@ has parent => (
     default => '',
 );
 
+has command => (
+    is      => 'lazy',
+    builder => sub ($self) {
+        lc( ( split /::/, ref $self )[-1] =~ s/([a-z])([A-Z])/$1-$2/gr );
+    }
+);
+
 has arguments => (
     is      => 'ro',
     default => sub { [] },
