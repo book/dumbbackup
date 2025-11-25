@@ -30,12 +30,7 @@ with
 
 sub getopt_config { qw( pass_through ) }    # keep the --
 
-sub options_spec {
-    qw(
-      dry_run|dry-run
-      others!
-    );
-}
+sub options_spec { qw( others! ); }
 
 sub options_defaults { }
 
