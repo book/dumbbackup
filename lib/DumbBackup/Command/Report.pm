@@ -101,12 +101,35 @@ sub retention_report ( $self, $store, @backups ) {
 
 sub call ( $self ) {
     my $options = $self->options;
+    my @stores  = $self->arguments->@*;
 
     binmode( STDOUT, ':utf8' );
-    for my $store ( $self->arguments->@* ) {
-        my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
-        print $self->retention_report( $store, @backups ), "\n"
-          if @backups;
+    if ( $self->command eq 'summary' ) {
+        my @store_backups =
+          grep @$_ > 1,    # only show stores with at least 1 backup
+          map [ $_, sort grep -d, grep $_ =~ BACKUP_RX, glob "$_/*" ],
+          grep -d, @stores;
+        return 0 unless @store_backups;
+
+        my $first_cell = max map length, 'host', map $_->[0], @store_backups;
+        my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
+        say sprintf "$fmt count │ keep ", qw( host first last );
+        say join '┼', '─' x ( $first_cell + 2 ),
+          '─' x 21, '─' x 21, '─' x 7, '─' x 6;
+        for my $store_backups (@store_backups) {
+            my ( $store, @backups ) = @$store_backups;
+            say sprintf "$fmt %5d │ %4d ", $store,
+              basename( $backups[0] ), basename( $backups[-1] ),
+              scalar @backups, scalar keys $self->retention_hash(@backups)->%*;
+        }
+        say '';
+    }
+    else {
+        for my $store (@stores) {
+            my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
+            say $self->retention_report( $store, @backups )
+              if @backups;
+        }
     }
 
     return 0;
@@ -126,16 +149,18 @@ dumbbackup report - Show report on stored backups, according to the retention po
 
   dumbbackup report [options] DIR...
 
+Aliases: C<report>, C<summary>.
+
 =head2 OPTIONS
 
 =head3 Reporting options
 
     --strike               strike out the backups to be deleted from the report
-    --show-backups         show an additional column with the backup directory name
+    --show-backups         show an additional column with the actual backup name
 
 =head3 Retention policy options
 
-These options help define the retention policy:
+These options help define the retention policy for the report:
 
     --keep-days <n>        keep <n> daily backups
     --keep-weeks <n>       keep <n> weekly backups
@@ -147,6 +172,8 @@ All options above accept the corresponding aliases.
 E.g., I<--days> and I<--daily> are valid aliases for I<--keep-days>.
 
 =head1 DESCRIPTION
+
+=head2 Report
 
 B<dumbbackup report> prints a retention report on all the backups found
 in the given stores.
@@ -183,6 +210,22 @@ The backup directories are of the form C<YYYY-MM-DD_hh-mm-ss>. When the
 "backup" column is not shown (the default), the same day can show up
 multiple times in the "daily" column, if multiple backups exist for
 that day.
+
+=head2 Summary
+
+When called as B<dumbbackup summary>, the command prints a summary of
+all the stores passed on the command-line:
+
+        host │ first               │ last                │ count │ keep 
+    ─────────┼─────────────────────┼─────────────────────┼───────┼──────
+       rakkk │ 2025-11-22_08-59-34 │ 2025-11-23_17-12-04 │     5 │    2 
+       zlonk │ 2024-01-01          │ 2025-10-29_10-12-00 │    20 │   14 
+       kapow │ 2024-12-07          │ 2025-01-09          │    14 │   11 
+     sploosh │ 2024-06-30          │ 2025-03-09          │    16 │   16 
+      thwack │ 2019-10-11          │ 2022-01-14          │    34 │   15 
+
+The "keep" column shows how many backups would remain after running
+B<dumbbackup cleanup>.
 
 =head1 AUTHOR
 
