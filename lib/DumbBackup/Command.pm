@@ -24,6 +24,7 @@ sub aliases {
         cleanup => 'cleanup',
         keep    => 'cleanup',
         report  => 'report',
+        summary => 'report',
         help    => 'help',
         manual  => 'help',
     );

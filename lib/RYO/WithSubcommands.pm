@@ -21,13 +21,12 @@ sub package_prefix ($self) { ref $self }
 # no abbreviations will be supported
 sub aliases { }
 
-sub resolve_alias ( $self, $command ) {
+sub find_candidate ( $self, $command ) {
     my %alias      = $self->aliases;
     my @candidates = sort grep /\A$command/, uniq %alias;
     $self->usage_error("Ambiguous command '$command': @candidates")
       if @candidates > 1;
-    my $cmd = shift @candidates;
-    return $cmd ? $alias{$cmd} // $cmd : $command;
+    return shift @candidates;
 }
 
 sub resolve_subcommand ( $self, $command ) {
@@ -38,7 +37,9 @@ sub resolve_subcommand ( $self, $command ) {
     $self->usage_error("Invalid command: '$command'")
       if $command !~ /\A[a-z]+(?:-[a-z]+)*\z/;
 
-    $command = $self->resolve_alias($command);
+    # find the candidate command, and resolve the alias, if any
+    my $cmd = $self->find_candidate($command);
+    $command = $cmd ? { $self->aliases }->{$cmd} // $cmd : $command;
 
     my $module = $command =~ s/(?:\A|-)(.)/\u$1/gr;
     $module = $self->package_prefix . "::$module";
@@ -56,8 +57,9 @@ sub resolve_subcommand ( $self, $command ) {
 
 sub call ($self) {
     my $command = shift $self->arguments->@*;
-    exit $self->resolve_subcommand($command)->new(
+    return $self->resolve_subcommand($command)->new(
         parent    => $self,
+        command   => $self->find_candidate($command) // $command,
         arguments => [ $self->arguments->@* ],
     )->run;
 }
