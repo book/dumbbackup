@@ -1,6 +1,6 @@
 use 5.024;
 use warnings;
-use Test::More;
+use Test2::V0;
 
 use Time::Local qw( timegm );
 use POSIX qw( strftime );
@@ -61,7 +61,7 @@ while ( my ( $date, $buckets ) = splice @bucket_tests, 0, 2 ) {
       for keys %$buckets;
 }
 
-is_deeply( DumbBackup::Test::_buckets_for( @dates ),
+is( DumbBackup::Test::_buckets_for( @dates ),
     $expected_buckets, '_buckets_for' );
 
 # build 2 years worth of backups starting from 2022-01-01
@@ -76,7 +76,7 @@ continue { $t += 86400; }
 # result with default arguments
 my $db   = DumbBackup::Test->new;
 my @kept = sort keys $db->retention_hash(@backups)->%*;
-is_deeply(
+is(
     \@kept,
     [
         '2022-12-31',    # last yearly (3)
@@ -101,7 +101,7 @@ is_deeply(
 );
 
 push @kept, '2024-01-01';    # one more backup
-is_deeply(
+is(
     [ sort keys $db->retention_hash(@kept)->%* ],
     [
         '2022-12-31',    # last yearly (3)
@@ -123,7 +123,7 @@ is_deeply(
 );
 
 # example from the docs
-is_deeply(
+is(
     [
         sort keys $db->retention_hash(
             '2019-12-02',    # last yearly
@@ -162,7 +162,7 @@ is_deeply(
 # %Y-%W has issues, as it splits one Mon-Sun week
 # into two Mon-Tue and Wed-Sun weeks
 # %G-%V has both in the same week
-is_deeply(
+is(
     [
         sort keys $db->retention_hash(
             '2024-11-30',    # week 2024-48, Sat

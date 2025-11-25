@@ -1,5 +1,5 @@
 use v5.24;
-use Test::More;
+use Test2::V0;
 
 # role adding the option --foo
 package MyApp::OptionFoo {
@@ -133,9 +133,9 @@ for my $t (@tests) {
       : $base;
     my $app  = $class->new( arguments => [ $setup->{args}->@* ] );
     my $name = lc $base;
-    is_deeply( $app->options, $expected_options,
+    is( $app->options, $expected_options,
         "options for: $name $setup->{args}->@*" );
-    is_deeply( $app->arguments, $expected_arguments,
+    is( $app->arguments, $expected_arguments,
         "arguments for: $name $setup->{args}->@*" );
 }
 
