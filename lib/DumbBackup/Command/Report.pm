@@ -99,30 +99,47 @@ sub retention_report ( $self, $store, @backups ) {
     return " $store\n$report";
 }
 
+sub summary_report ( $self, @stores ) {
+    my @store_backups =
+      sort {    # sort by:
+        $a->[1] cmp $b->[1]           # first backup
+          || $a->[-1] cmp $b->[-1]    # last backup
+          || $a->[0] cmp $b->[0]      # hostname
+      }
+      grep @$_ > 1,                   # only show stores with at least 1 backup
+      map [ map basename($_),         # just keep the store and backup names
+        $_,                           # hostname / store
+        sort grep -d, grep $_ =~ BACKUP_RX, glob "$_/*" ],
+      grep -d, @stores;
+    return unless @store_backups;
+
+    # header
+    my $first_cell = max map length, 'host', map $_->[0], @store_backups;
+    my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
+    my $summary    = sprintf "$fmt count │ keep \n", qw( host first last );
+    $summary .= join( '┼',
+        '─' x ( $first_cell + 2 ),
+        '─' x 21, '─' x 21, '─' x 7, '─' x 6 )
+      . "\n";
+
+    # store summaries
+    for my $store_backups (@store_backups) {
+        my ( $store, @backups ) = @$store_backups;
+        $summary .= sprintf "$fmt %5d │ %4d \n", $store,
+          basename( $backups[0] ), basename( $backups[-1] ),
+          scalar @backups, scalar keys $self->retention_hash(@backups)->%*;
+    }
+    return $summary;
+}
+
 sub call ( $self ) {
     my $options = $self->options;
     my @stores  = $self->arguments->@*;
 
     binmode( STDOUT, ':utf8' );
     if ( $self->command eq 'summary' ) {
-        my @store_backups =
-          grep @$_ > 1,    # only show stores with at least 1 backup
-          map [ $_, sort grep -d, grep $_ =~ BACKUP_RX, glob "$_/*" ],
-          grep -d, @stores;
-        return 0 unless @store_backups;
-
-        my $first_cell = max map length, 'host', map $_->[0], @store_backups;
-        my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
-        say sprintf "$fmt count │ keep ", qw( host first last );
-        say join '┼', '─' x ( $first_cell + 2 ),
-          '─' x 21, '─' x 21, '─' x 7, '─' x 6;
-        for my $store_backups (@store_backups) {
-            my ( $store, @backups ) = @$store_backups;
-            say sprintf "$fmt %5d │ %4d ", $store,
-              basename( $backups[0] ), basename( $backups[-1] ),
-              scalar @backups, scalar keys $self->retention_hash(@backups)->%*;
-        }
-        say '';
+        @stores = glob '*' unless @stores;    # default to current dir
+        say $self->summary_report(@stores);
     }
     else {
         for my $store (@stores) {
@@ -218,11 +235,11 @@ all the stores passed on the command-line:
 
         host │ first               │ last                │ count │ keep 
     ─────────┼─────────────────────┼─────────────────────┼───────┼──────
-       rakkk │ 2025-11-22_08-59-34 │ 2025-11-23_17-12-04 │     5 │    2 
-       zlonk │ 2024-01-01          │ 2025-10-29_10-12-00 │    20 │   14 
-       kapow │ 2024-12-07          │ 2025-01-09          │    14 │   11 
-     sploosh │ 2024-06-30          │ 2025-03-09          │    16 │   16 
       thwack │ 2019-10-11          │ 2022-01-14          │    34 │   15 
+       zlonk │ 2024-01-01          │ 2025-10-29_10-12-00 │    20 │   14 
+     sploosh │ 2024-06-30          │ 2025-03-09          │    16 │   16 
+       kapow │ 2024-12-07          │ 2025-01-09          │    14 │   11 
+       rakkk │ 2025-11-22_08-59-34 │ 2025-11-23_17-12-04 │     5 │    2 
 
 The "keep" column shows how many backups would remain after running
 B<dumbbackup cleanup>.
