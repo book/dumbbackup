@@ -111,6 +111,11 @@ executable:
   * if the backup step is not run, older backup won't disappear as
     they age.
 
+* **Cute reports**
+
+  The `dumpbackup report` and `dumbbackup summary` commands provide
+  nice reports on the state of the backups.
+
 # Usage
 
 ## Backup
