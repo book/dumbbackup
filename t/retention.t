@@ -201,4 +201,37 @@ is(
     '2024-12-31 and 2025-01-01 are in the same week'
 );
 
+$db = DumbBackup::Test->new(
+    arguments => [ qw(
+        --days     2
+        --weeks    2
+        --months   3
+        --quarters 5
+        --years    3
+	)]
+);
+
+is(
+    [
+        sort keys $db->retention_hash(
+              '2015-12-31', #     |     | m 3 | q 2 | y 2
+              '2016-01-24', #     |     |     |     |    
+              '2016-01-30', #     |     |     |     |    
+              '2016-01-31', #     | w 2 | m 2 |     |    
+              '2016-02-01', #     |     |     |     |    
+              '2016-02-02', # d 2 |     |     |     |    
+              '2016-02-03', # d 1 | w 1 | m 1 | q 1 | y 1
+        )->%*
+    ],
+    [
+        qw(
+          2015-12-31
+          2016-01-31
+          2016-02-02
+          2016-02-03
+          )
+    ],
+    'policy: d 2 w 2 m 3 q 5 y 3'
+);
+
 done_testing;
