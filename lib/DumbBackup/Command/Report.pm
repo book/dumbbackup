@@ -17,10 +17,13 @@ with
   'DumbBackup::RetentionPolicy',
   ;
 
+sub getopt_config { 'bundling' }
+
 sub options_spec {
     qw(
-      strike|strikeout|stroke
-      show_backups|show-backups|backups!
+      strike|strikeout|stroke|s!
+      backups|b!
+      keep|kept|kept|k!
     );
 }
 
@@ -61,7 +64,7 @@ sub retention_report ( $self, $store, @backups ) {
       0 .. $#PERIODS;
 
     # shall we show the "backup" column?
-    my $show_backups = !!$options->{show_backups};
+    my $show_backups = !!$options->{backups};
     if ($show_backups) {
         unshift @headers, 'backup';
         unshift @fmt,     sprintf '%%-%ds',
@@ -105,6 +108,7 @@ sub retention_report ( $self, $store, @backups ) {
 }
 
 sub summary_report ( $self, @stores ) {
+    my $options = $self->options;
     my @store_backups =
       sort {    # sort by:
         $a->[1] cmp $b->[1]           # first backup
@@ -121,18 +125,25 @@ sub summary_report ( $self, @stores ) {
     # header
     my $first_cell = max map length, 'host', map $_->[0], @store_backups;
     my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
-    my $summary    = sprintf "$fmt count │ keep \n", qw( host first last );
+    my $summary    = sprintf "$fmt count ", qw( host first last );
+    $summary .= "│ keep " if $options->{keep};
+    $summary .= "\n";
     $summary .= join( '┼',
         '─' x ( $first_cell + 2 ),
-        '─' x 21, '─' x 21, '─' x 7, '─' x 6 )
+        '─' x 21, '─' x 21, '─' x 7,
+        ( '─' x 6 )x!! $options->{keep} )
       . "\n";
 
     # store summaries
+    $fmt .= $options->{keep} ? " %5d │ %4d \n" : " %5d \n";
     for my $store_backups (@store_backups) {
         my ( $store, @backups ) = @$store_backups;
-        $summary .= sprintf "$fmt %5d │ %4d \n", $store,
+        $summary .= sprintf $fmt, $store,
           basename( $backups[0] ), basename( $backups[-1] ),
-          scalar @backups, scalar keys $self->retention_hash(@backups)->%*;
+          scalar @backups,
+          $options->{keep}
+          ? scalar keys $self->retention_hash(@backups)->%*
+          : ();
     }
     return $summary;
 }
@@ -178,7 +189,8 @@ Aliases: C<report>, C<summary>.
 =head3 Reporting options
 
     --strike               strike out the backups to be deleted from the report
-    --show-backups         show an additional column with the actual backup name
+    --backups              show an extra column with the actual backup name
+    --keep                 show an extra column with the count of backups kept
 
 =head3 Retention policy options
 
