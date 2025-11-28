@@ -78,8 +78,9 @@ sub retention_report ( $self, $store, @backups ) {
       . "─\n";
 
     # compute the actual report
+    my $keeping = 0;
     for my $date ( sort @backups ) {
-        $report .= ' '
+        my $line .= ' '
           . join(
             " │ ",
             ( sprintf( $fmt[0], basename($date) ) ) x $show_backups,
@@ -90,13 +91,17 @@ sub retention_report ( $self, $store, @backups ) {
             ),
             0 .. $#PERIODS
           ) . " \n";
+        $keeping++ if $line =~ /\*/;
+        $report .= $line;
     }
 
     # strike backups to be removed with COMBINING LONG STROKE OVERLAY
     $report =~ s/^([^*y┼┬]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
       if $options->{strike};
 
-    return " $store\n$report";
+    return sprintf " $store (%d backup%s, keep %s)\n$report",
+      scalar @backups, @backups > 1 ? 's' : '',
+      $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
 }
 
 sub summary_report ( $self, @stores ) {
@@ -197,7 +202,7 @@ in the given stores.
 
 The table header summarizes the retention policy.
 
-     host directory
+     host (17 backups, keep 15)
     ──────────────────┬───────────┬───────────┬─────────────┬───────────
      7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
     ──────────────────┼───────────┼───────────┼─────────────┼───────────
