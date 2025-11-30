@@ -262,7 +262,7 @@ to produce a table of all the backups that exist for a given target
 and their corresponding buckets:
 
 ```
- /backups/zlonk
+ /backups/zlonk (34 backups, keep 15)
 ──────────────────┬───────────┬───────────┬─────────────┬───────────
  7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
 ──────────────────┼───────────┼───────────┼─────────────┼───────────
@@ -334,7 +334,7 @@ $ dumbbackup cleanup /backups/zlonk --dry-run
 After running `dumbackup cleanup` for real, the remaining backups are:
 
 ```
- /backups/zlonk
+ /backups/zlonk (34 backups, keep all)
 ──────────────────┬───────────┬───────────┬─────────────┬───────────
  7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
 ──────────────────┼───────────┼───────────┼─────────────┼───────────
@@ -370,7 +370,7 @@ backups that covers less than 12 months will gain nothing, in terms
 of going back in time:
 
 ```
- /backups/zlonk
+ /backups/zlonk (21 backups, keep all)
 ──────────────────┬───────────┬────────────┬─────────────┬───────────
  7 daily          │ 5 weekly  │ 12 monthly │ 4 quarterly │ 10 yearly 
 ──────────────────┼───────────┼────────────┼─────────────┼───────────
@@ -413,7 +413,7 @@ of kept backups will oscillate between 12 and 16.
 The widest spread for backups (16) would be similar to:
 
 ```
- /backups/zlonk
+ /backups/zlonk (16 backups, keep all)
 ──────────────────┬───────────┬───────────┬─────────────┬──────────
  7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 0 yearly 
 ──────────────────┼───────────┼───────────┼─────────────┼──────────
@@ -438,7 +438,7 @@ The widest spread for backups (16) would be similar to:
 While the tighest spread of backups (12) would look like this:
 
 ```
- /backups/zlonk
+ /backups/zlonk (12 backups, keep all)
 ──────────────────┬───────────┬───────────┬─────────────┬──────────
  7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 0 yearly 
 ──────────────────┼───────────┼───────────┼─────────────┼──────────

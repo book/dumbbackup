@@ -17,10 +17,13 @@ with
   'DumbBackup::RetentionPolicy',
   ;
 
+sub getopt_config { 'bundling' }
+
 sub options_spec {
     qw(
-      strike|strikeout|stroke
-      show_backups|show-backups|backups!
+      strike|strikeout|stroke|s!
+      backups|b!
+      keep|kept|kept|k!
     );
 }
 
@@ -61,7 +64,7 @@ sub retention_report ( $self, $store, @backups ) {
       0 .. $#PERIODS;
 
     # shall we show the "backup" column?
-    my $show_backups = !!$options->{show_backups};
+    my $show_backups = !!$options->{backups};
     if ($show_backups) {
         unshift @headers, 'backup';
         unshift @fmt,     sprintf '%%-%ds',
@@ -78,8 +81,9 @@ sub retention_report ( $self, $store, @backups ) {
       . "─\n";
 
     # compute the actual report
+    my $keeping = 0;
     for my $date ( sort @backups ) {
-        $report .= ' '
+        my $line .= ' '
           . join(
             " │ ",
             ( sprintf( $fmt[0], basename($date) ) ) x $show_backups,
@@ -90,16 +94,21 @@ sub retention_report ( $self, $store, @backups ) {
             ),
             0 .. $#PERIODS
           ) . " \n";
+        $keeping++ if $line =~ /\*/;
+        $report .= $line;
     }
 
     # strike backups to be removed with COMBINING LONG STROKE OVERLAY
     $report =~ s/^([^*y┼┬]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
       if $options->{strike};
 
-    return " $store\n$report";
+    return sprintf " $store (%d backup%s, keep %s)\n$report",
+      scalar @backups, @backups > 1 ? 's' : '',
+      $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
 }
 
 sub summary_report ( $self, @stores ) {
+    my $options = $self->options;
     my @store_backups =
       sort {    # sort by:
         $a->[1] cmp $b->[1]           # first backup
@@ -116,18 +125,25 @@ sub summary_report ( $self, @stores ) {
     # header
     my $first_cell = max map length, 'host', map $_->[0], @store_backups;
     my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
-    my $summary    = sprintf "$fmt count │ keep \n", qw( host first last );
+    my $summary    = sprintf "$fmt count ", qw( host first last );
+    $summary .= "│ keep " if $options->{keep};
+    $summary .= "\n";
     $summary .= join( '┼',
         '─' x ( $first_cell + 2 ),
-        '─' x 21, '─' x 21, '─' x 7, '─' x 6 )
+        '─' x 21, '─' x 21, '─' x 7,
+        ( '─' x 6 )x!! $options->{keep} )
       . "\n";
 
     # store summaries
+    $fmt .= $options->{keep} ? " %5d │ %4d \n" : " %5d \n";
     for my $store_backups (@store_backups) {
         my ( $store, @backups ) = @$store_backups;
-        $summary .= sprintf "$fmt %5d │ %4d \n", $store,
+        $summary .= sprintf $fmt, $store,
           basename( $backups[0] ), basename( $backups[-1] ),
-          scalar @backups, scalar keys $self->retention_hash(@backups)->%*;
+          scalar @backups,
+          $options->{keep}
+          ? scalar keys $self->retention_hash(@backups)->%*
+          : ();
     }
     return $summary;
 }
@@ -173,7 +189,8 @@ Aliases: C<report>, C<summary>.
 =head3 Reporting options
 
     --strike               strike out the backups to be deleted from the report
-    --show-backups         show an additional column with the actual backup name
+    --backups              show an extra column with the actual backup name
+    --keep                 show an extra column with the count of backups kept
 
 =head3 Retention policy options
 
@@ -197,7 +214,7 @@ in the given stores.
 
 The table header summarizes the retention policy.
 
-     host directory
+     host (17 backups, keep 15)
     ──────────────────┬───────────┬───────────┬─────────────┬───────────
      7 daily          │ 5 weekly  │ 3 monthly │ 4 quarterly │ 10 yearly 
     ──────────────────┼───────────┼───────────┼─────────────┼───────────
