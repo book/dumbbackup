@@ -24,10 +24,13 @@ sub options_spec {
       strike|strikeout|stroke|s!
       backups|b!
       keep|kept|kept|k!
+      order_by|order-by|sort_by|sort-by=s
     );
 }
 
-sub options_defaults { }
+sub options_defaults {
+    ( order_by => 'last-backup' )
+}
 
 sub retention_report ( $self, $store, @backups ) {
     my $options = $self->options;
@@ -110,17 +113,31 @@ sub retention_report ( $self, $store, @backups ) {
 sub summary_report ( $self, @stores ) {
     my $options = $self->options;
     my @store_backups =
-      sort {    # sort by:
-        $a->[1] cmp $b->[1]           # first backup
-          || $a->[-1] cmp $b->[-1]    # last backup
-          || $a->[0] cmp $b->[0]      # hostname
-      }
       grep @$_ > 1,                   # only show stores with at least 1 backup
       map [ map basename($_),         # just keep the store and backup names
         $_,                           # hostname / store
         sort grep -d, grep $_ =~ BACKUP_RX, glob "$_/*" ],
       grep -d, @stores;
     return unless @store_backups;
+
+    # sort
+    state $ranking = {
+        'last-backup'  => [ -1, 1,  0 ],    # last, first, name
+        'last_backup'  => [ -1, 1,  0 ],
+        'first-backup' => [ 1,  -1, 0 ],    # first, last, name
+        'first_backup' => [ 1,  -1, 0 ],
+        'hostname'     => [ 0,  -1, 1 ],    # name, last, first
+        'name'         => [ 0,  -1, 1 ],
+    };
+    my ($ranking_key) = grep /\A$options->{order_by}/, keys %$ranking;
+    $self->usage_error("Unknown order-by key: $options->{order_by}")
+      if !defined $ranking_key;
+    my @sort_keys = $ranking->{$ranking_key}->@*;
+    @store_backups = sort {                 # sort by:
+        $a->[ $sort_keys[0] ] cmp $b->[ $sort_keys[0] ]
+          || $a->[ $sort_keys[1] ] cmp $b->[ $sort_keys[1] ]
+          || $a->[ $sort_keys[2] ] cmp $b->[ $sort_keys[2] ]
+    } @store_backups;
 
     # header
     my $first_cell = max map length, 'host', map $_->[0], @store_backups;
@@ -190,7 +207,12 @@ Aliases: C<report>, C<summary>.
 
     --strike               strike out the backups to be deleted from the report
     --backups              show an extra column with the actual backup name
+
+=head2 Summary options
+
     --keep                 show an extra column with the count of backups kept
+    --order-by <main-key>  order the summary rows by either:
+                           last-backup (default), first-backup, hostname
 
 =head3 Retention policy options
 
@@ -250,16 +272,16 @@ that day.
 When called as B<dumbbackup summary>, the command prints a summary of
 all the stores passed on the command-line:
 
-        host │ first               │ last                │ count │ keep 
-    ─────────┼─────────────────────┼─────────────────────┼───────┼──────
-      thwack │ 2019-10-11          │ 2022-01-14          │    34 │   15 
-       zlonk │ 2024-01-01          │ 2025-10-29_10-12-00 │    20 │   14 
-     sploosh │ 2024-06-30          │ 2025-03-09          │    16 │   16 
-       kapow │ 2024-12-07          │ 2025-01-09          │    14 │   11 
-       rakkk │ 2025-11-22_08-59-34 │ 2025-11-23_17-12-04 │     5 │    2 
+        host │ first               │ last                │ count 
+    ─────────┼─────────────────────┼─────────────────────┼───────
+      thwack │ 2019-10-11          │ 2022-01-14          │    34 
+       kapow │ 2024-12-07          │ 2025-01-09          │    14 
+     sploosh │ 2024-06-30          │ 2025-03-09          │    16 
+       zlonk │ 2024-01-01          │ 2025-10-29_10-12-00 │    20 
+       rakkk │ 2025-11-22_08-59-34 │ 2025-11-23_17-12-04 │     5 
 
-The "keep" column shows how many backups would remain after running
-B<dumbbackup cleanup>.
+The "keep" column (when requested) shows how many backups would remain
+after running B<dumbbackup cleanup>.
 
 =head1 AUTHOR
 
