@@ -487,7 +487,7 @@ monthly and quartely backup).
   the `backup` and `cleanup` commands.
 
   The tool is still a single file, thanks to
-  `[App::FatPacker](https://metacpan.org/pod/App::FatPacker)`.
+  [`App::FatPacker`](https://metacpan.org/pod/App::FatPacker).
   It is generated with the command `pack-script`.
 
 * March 2022
@@ -503,7 +503,8 @@ monthly and quartely backup).
 
   Finished including the retention policy in `dumbbackup cleanup`, and
   polished the visualization into a report, that became the output of
-  `dumbbackup cleanup --report`. And documented it in detail.
+  `dumbbackup cleanup --report` (and later `dumbbackup report`).
+  And documented it in detail.
 
   Added support for showing help via `dumbbackup help` or the `--help`
   option in each subcommmand.
@@ -522,9 +523,9 @@ monthly and quartely backup).
   number of shortcomings in the generated command-line. I took inspiration
   from [linux-timemachine](https://github.com/cytopia/linux-timemachine)
   to fix them, and improve `dumbbackup`. One of the improvements was to
-  ensure backups are only in their final destination when the `rsync`
-  command succeeds, so that no incomplete backups risk polluting the
-  history.
+  ensure backups are only moved to their final destination when the
+  `rsync` command succeeds, so that no incomplete backups risk polluting
+  the history.
 
 # See also
 
