@@ -527,6 +527,11 @@ monthly and quartely backup).
   `rsync` command succeeds, so that no incomplete backups risk polluting
   the history.
 
+* January 2026
+
+  Minor improvements to the various reporting commands
+  (`dumbbackup report` and `dumbbackup summary`).
+
 # See also
 
 `dumbbackup` is not the greatest backup system ever, but it works
