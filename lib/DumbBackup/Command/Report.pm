@@ -6,6 +6,7 @@ use utf8;
 use File::Basename   qw( basename );
 use List::Util       qw( max );
 use DumbBackup::Constants qw( BACKUP_RX @PERIODS );
+use DumbBackup::Table     qw( table_for );
 
 use Moo;
 use namespace::clean;
@@ -54,87 +55,59 @@ sub retention_report ( $self, $store, @backups ) {
         $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
     }
 
+    my ( $keeping, @rows );
+
     # compute the compact report
     if ( $options->{compact} ) {
-        my $keeping = 0;
-        my $report;    # YYYY-mm-dd_HH-MM-SS
-        for my $date ( sort @backups ) {
-            my $line .= sprintf( " %-19s", basename($date) ) . ' │ ' . join(
-                '',
-                map $keep{ $PERIODS[$_] }{$date}   # first letter of each bucket
-                ? uc substr( $PERIODS[$_], 0, 1 )
+        @rows = map {
+            my $date = $_;
+            [
+                basename($_),
+                join '', map $keep{ $PERIODS[$_] }{$date}
+                ? uc substr( $PERIODS[$_], 0, 1 )  # first letter of each bucket
                 : ' ',
                 0 .. $#PERIODS
-            ) . " \n";
-            $keeping++ if $line =~ /[DWMQY]/;
-            $report .= $line;
+            ]
+        } sort @backups;
+        $keeping++ for grep "@$_" =~ /[DWMQY]/, @rows;
+    }
+
+    # compute the standard report
+    else {
+        my $show_backups = !!$options->{backups};
+        for my $date ( sort @backups ) {
+            push @rows,
+              [
+                ( basename($date) ) x $show_backups,
+                map $tag{$date}{ $PERIODS[$_] }
+                  . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' ),
+                0 .. $#PERIODS
+              ];
         }
-
-        # strike backups to be removed with COMBINING LONG STROKE OVERLAY
-        $report =~ s/^([^┼┬DWMQY]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
-          if $options->{strike};
-        my $header =
-          sprintf " $store (%d backup%s, keep %s)",
-          scalar @backups, @backups > 1 ? 's' : '',
-          $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
-        return join "\n", $header, '─' x 21 . '┬' . '─' x 7, $report;
+        $keeping++ for grep "@$_" =~ /[*]/, @rows;
+        unshift @rows,
+          [
+            ('backup') x $show_backups,
+            "$options->{days} daily",
+            "$options->{weeks} weekly",
+            "$options->{months} monthly",
+            "$options->{quarters} quarterly",
+            "$options->{years} yearly",
+          ],
+          '---';
     }
 
-    # compute the format for each column of the report
-    my @headers = (
-        "$options->{days} daily",
-        "$options->{weeks} weekly",
-        "$options->{months} monthly",
-        "$options->{quarters} quarterly",
-        "$options->{years} yearly",
-    );
-    my @fmt = map "%-${_}s",
-      map max( 2 + length( $tag{ $backups[0] // '' }{ $PERIODS[$_] } // '' ),
-        length $headers[$_] ),
-      0 .. $#PERIODS;
-
-    # shall we show the "backup" column?
-    my $show_backups = !!$options->{backups};
-    if ($show_backups) {
-        unshift @headers, 'backup';
-        unshift @fmt,     sprintf '%%-%ds',
-          max( map length basename($_), @backups );
-    }
-
-    # compute the report header
-    my $report = '─'
-      . join( '─┬─', map '─' x length( sprintf $_, ' ' ), @fmt )
-      . "─\n";
-    $report .= sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
-    $report .= '─'
-      . join( '─┼─', map '─' x length( sprintf $_, ' ' ), @fmt )
-      . "─\n";
-
-    # compute the actual report
-    my $keeping = 0;
-    for my $date ( sort @backups ) {
-        my $line .= ' '
-          . join(
-            " │ ",
-            ( sprintf( $fmt[0], basename($date) ) ) x $show_backups,
-            map sprintf(
-                $fmt[ $_ + $show_backups ],
-                $tag{$date}{ $PERIODS[$_] }
-                  . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' )
-            ),
-            0 .. $#PERIODS
-          ) . " \n";
-        $keeping++ if $line =~ /\*/;
-        $report .= $line;
-    }
-
-    # strike backups to be removed with COMBINING LONG STROKE OVERLAY
-    $report =~ s/^([^*y┼┬]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
-      if $options->{strike};
-
-    return sprintf " $store (%d backup%s, keep %s)\n$report",
+    # generate the table
+    my $header = sprintf "$store (%d backup%s, keep %s)",
       scalar @backups, @backups > 1 ? 's' : '',
       $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
+    my $report = table_for( $header, @rows );
+
+    # strike backups to be removed with COMBINING LONG STROKE OVERLAY
+    $report =~ s/^([^*y┼┬DWMQY]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+      if $options->{strike};
+
+    return $report;
 }
 
 sub summary_report ( $self, @stores ) {
@@ -147,7 +120,7 @@ sub summary_report ( $self, @stores ) {
       grep -d, @stores;
     return unless @store_backups;
 
-    # sort
+    # sort the hosts as requested
     state $ranking = {
         'last-backup'  => [ -1, 1,  0 ],    # last, first, name
         'last_backup'  => [ -1, 1,  0 ],
@@ -167,29 +140,23 @@ sub summary_report ( $self, @stores ) {
     } @store_backups;
 
     # header
-    my $first_cell = max map length, 'host', map $_->[0], @store_backups;
-    my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
-    my $summary    = sprintf "$fmt count ", qw( host first last );
-    $summary .= "│ keep " if $options->{keep};
-    $summary .= "\n";
-    $summary .= join( '┼',
-        '─' x ( $first_cell + 2 ),
-        '─' x 21, '─' x 21, '─' x 7,
-        ( '─' x 6 )x!! $options->{keep} )
-      . "\n";
+    my @rows = ( [ qw( host first last count ) ], '---' );
+    push $rows[0]->@*, 'keep' if $options->{keep};
 
     # store summaries
-    $fmt .= $options->{keep} ? " %5d │ %4d \n" : " %5d \n";
     for my $store_backups (@store_backups) {
         my ( $store, @backups ) = @$store_backups;
-        $summary .= sprintf $fmt, $store,
-          basename( $backups[0] ), basename( $backups[-1] ),
-          scalar @backups,
-          $options->{keep}
-          ? scalar keys $self->retention_hash(@backups)->%*
-          : ();
+        push @rows, [
+            $store,
+            basename( $backups[0] ),     # first backup
+            basename( $backups[-1] ),    # last backup
+            scalar @backups,             # count
+            $options->{keep}
+            ? scalar keys $self->retention_hash(@backups)->%*
+            : ()
+        ];
     }
-    return $summary;
+    return table_for( @rows );
 }
 
 sub call ( $self ) {
@@ -199,12 +166,12 @@ sub call ( $self ) {
     binmode( STDOUT, ':utf8' );
     if ( $self->command eq 'summary' ) {
         @stores = glob '*' unless @stores;    # default to current dir
-        say $self->summary_report(@stores);
+        print $self->summary_report(@stores);
     }
     else {
         for my $store (@stores) {
             my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
-            say $self->retention_report( $store, @backups )
+            print $self->retention_report( $store, @backups )
               if @backups;
         }
     }
