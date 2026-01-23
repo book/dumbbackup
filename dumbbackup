@@ -937,6 +937,7 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
   use File::Basename   qw( basename );
   use List::Util       qw( max );
   use DumbBackup::Constants qw( BACKUP_RX @PERIODS );
+  use DumbBackup::Table     qw( table_for );
   
   use Moo;
   use namespace::clean;
@@ -954,6 +955,7 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
       qw(
         strike|strikeout|stroke|s!
         backups|b!
+        compact|c!
         keep|kept|kept|k!
         order_by|order-by|sort_by|sort-by=s
       );
@@ -984,61 +986,59 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
           $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
       }
   
-      # compute the format for each column of the report
-      my @headers = (
-          "$options->{days} daily",
-          "$options->{weeks} weekly",
-          "$options->{months} monthly",
-          "$options->{quarters} quarterly",
-          "$options->{years} yearly",
-      );
-      my @fmt = map "%-${_}s",
-        map max( 2 + length( $tag{ $backups[0] // '' }{ $PERIODS[$_] } // '' ),
-          length $headers[$_] ),
-        0 .. $#PERIODS;
+      my ( $keeping, @rows );
   
-      # shall we show the "backup" column?
-      my $show_backups = !!$options->{backups};
-      if ($show_backups) {
-          unshift @headers, 'backup';
-          unshift @fmt,     sprintf '%%-%ds',
-            max( map length basename($_), @backups );
+      # compute the compact report
+      if ( $options->{compact} ) {
+          @rows = map {
+              my $date = $_;
+              [
+                  basename($_),
+                  join '', map $keep{ $PERIODS[$_] }{$date}
+                  ? uc substr( $PERIODS[$_], 0, 1 )  # first letter of each bucket
+                  : ' ',
+                  0 .. $#PERIODS
+              ]
+          } sort @backups;
+          $keeping++ for grep "@$_" =~ /[DWMQY]/, @rows;
       }
   
-      # compute the report header
-      my $report = '─'
-        . join( '─┬─', map '─' x length( sprintf $_, ' ' ), @fmt )
-        . "─\n";
-      $report .= sprintf ' ' . join( ' │ ', @fmt ) . " \n", @headers;
-      $report .= '─'
-        . join( '─┼─', map '─' x length( sprintf $_, ' ' ), @fmt )
-        . "─\n";
-  
-      # compute the actual report
-      my $keeping = 0;
-      for my $date ( sort @backups ) {
-          my $line .= ' '
-            . join(
-              " │ ",
-              ( sprintf( $fmt[0], basename($date) ) ) x $show_backups,
-              map sprintf(
-                  $fmt[ $_ + $show_backups ],
-                  $tag{$date}{ $PERIODS[$_] }
-                    . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' )
-              ),
-              0 .. $#PERIODS
-            ) . " \n";
-          $keeping++ if $line =~ /\*/;
-          $report .= $line;
+      # compute the standard report
+      else {
+          my $show_backups = !!$options->{backups};
+          for my $date ( sort @backups ) {
+              push @rows,
+                [
+                  ( basename($date) ) x $show_backups,
+                  map $tag{$date}{ $PERIODS[$_] }
+                    . ( $keep{ $PERIODS[$_] }{$date} ? ' *' : '  ' ),
+                  0 .. $#PERIODS
+                ];
+          }
+          $keeping++ for grep "@$_" =~ /[*]/, @rows;
+          unshift @rows,
+            [
+              ('backup') x $show_backups,
+              "$options->{days} daily",
+              "$options->{weeks} weekly",
+              "$options->{months} monthly",
+              "$options->{quarters} quarterly",
+              "$options->{years} yearly",
+            ],
+            '---';
       }
   
-      # strike backups to be removed with COMBINING LONG STROKE OVERLAY
-      $report =~ s/^([^*y┼┬]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
-        if $options->{strike};
-  
-      return sprintf " $store (%d backup%s, keep %s)\n$report",
+      # generate the table
+      my $header = sprintf "$store (%d backup%s, keep %s)",
         scalar @backups, @backups > 1 ? 's' : '',
         $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
+      my $report = table_for( $header, @rows );
+  
+      # strike backups to be removed with COMBINING LONG STROKE OVERLAY
+      $report =~ s/^([^*y┼┬DWMQY]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+        if $options->{strike};
+  
+      return $report;
   }
   
   sub summary_report ( $self, @stores ) {
@@ -1051,7 +1051,7 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
         grep -d, @stores;
       return unless @store_backups;
   
-      # sort
+      # sort the hosts as requested
       state $ranking = {
           'last-backup'  => [ -1, 1,  0 ],    # last, first, name
           'last_backup'  => [ -1, 1,  0 ],
@@ -1071,29 +1071,23 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
       } @store_backups;
   
       # header
-      my $first_cell = max map length, 'host', map $_->[0], @store_backups;
-      my $fmt        = " %${first_cell}s │ %-19s │ %-19s │";
-      my $summary    = sprintf "$fmt count ", qw( host first last );
-      $summary .= "│ keep " if $options->{keep};
-      $summary .= "\n";
-      $summary .= join( '┼',
-          '─' x ( $first_cell + 2 ),
-          '─' x 21, '─' x 21, '─' x 7,
-          ( '─' x 6 )x!! $options->{keep} )
-        . "\n";
+      my @rows = ( [ qw( host first last count ) ], '---' );
+      push $rows[0]->@*, 'keep' if $options->{keep};
   
       # store summaries
-      $fmt .= $options->{keep} ? " %5d │ %4d \n" : " %5d \n";
       for my $store_backups (@store_backups) {
           my ( $store, @backups ) = @$store_backups;
-          $summary .= sprintf $fmt, $store,
-            basename( $backups[0] ), basename( $backups[-1] ),
-            scalar @backups,
-            $options->{keep}
-            ? scalar keys $self->retention_hash(@backups)->%*
-            : ();
+          push @rows, [
+              $store,
+              basename( $backups[0] ),     # first backup
+              basename( $backups[-1] ),    # last backup
+              scalar @backups,             # count
+              $options->{keep}
+              ? scalar keys $self->retention_hash(@backups)->%*
+              : ()
+          ];
       }
-      return $summary;
+      return table_for( @rows );
   }
   
   sub call ( $self ) {
@@ -1103,12 +1097,12 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
       binmode( STDOUT, ':utf8' );
       if ( $self->command eq 'summary' ) {
           @stores = glob '*' unless @stores;    # default to current dir
-          say $self->summary_report(@stores);
+          print $self->summary_report(@stores);
       }
       else {
           for my $store (@stores) {
               my @backups = grep -d, grep $_ =~ BACKUP_RX, glob "$store/*";
-              say $self->retention_report( $store, @backups )
+              print $self->retention_report( $store, @backups )
                 if @backups;
           }
       }
@@ -1137,6 +1131,7 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
   =head3 Reporting options
   
       --strike               strike out the backups to be deleted from the report
+      --compact              show a compact version of the report
       --backups              show an extra column with the actual backup name
   
   =head2 Summary options
@@ -1197,6 +1192,19 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
   "backup" column is not shown (the default), the same day can show up
   multiple times in the "daily" column, if multiple backups exist for
   that day.
+  
+  The compact report looks like the following, with the bucket each
+  backup belongs to indicated by its initial:
+  
+       host (7 backups, keep 5)
+      ─────────────────────┬───────
+       2024-01-04          │ DW Q  
+       2024-10-23          │ DW QY 
+       2025-03-17          │ DWMQ  
+       2025-11-29_13-44-17 │       
+       2025-11-29_23-45-11 │ DWM   
+       2025-12-20_08-24-32 │       
+       2025-12-20_17-42-51 │ DWMQY 
   
   =head2 Summary
   
@@ -1496,6 +1504,62 @@ $fatpacked{"DumbBackup/Sort.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<
   
   1;
 DUMBBACKUP_SORT
+
+$fatpacked{"DumbBackup/Table.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'DUMBBACKUP_TABLE';
+  package DumbBackup::Table;
+  use 5.024;
+  use warnings;
+  use utf8;
+  
+  use Exporter qw( import );
+  use List::Util qw( max sum );
+  
+  use experimental 'signatures';
+  
+  our @EXPORT_OK = qw(
+    table_for
+  );
+  
+  # assuming all rows have the same number of cells
+  sub table_for ( $header, @rows ) {
+      my $table;
+      if ( ref $header ) {
+          unshift @rows, $header;
+          $header = '';
+      }
+      my @cell_width = (0) x $rows[0]->@*;
+      for my $row ( grep ref, @rows ) {
+          $cell_width[$_] = max( $cell_width[$_], length( $row->[$_] ) )
+            for 0 .. $#$row;
+      }
+      my $table_width = sum( @cell_width - 1, map $_ + 2, @cell_width ) - 2;
+      if ( $table_width < length $header ) {
+          $cell_width[-1] = $cell_width[-1] + length($header) - $table_width;
+          $table_width = length $header;
+      }
+      $table .= sprintf( " %-${table_width}s \n", $header )
+        . join( '┬', map '─' x ( $_ + 2 ), @cell_width ) . "\n"
+        if $header;
+      for my $row (@rows) {
+          if ( ref $row ) {
+              $table .= ' '
+                . join( ' │ ',
+                  map sprintf( "%-$cell_width[$_]s", $row->[$_] ),
+                  0 .. $#$row )
+                . " \n";
+          }
+          else {
+              $table .= join( '┼',
+                  map '─' x ( $cell_width[$_] + 2 ),
+                  0 .. $rows[0]->$#* )
+                . "\n";
+          }
+      }
+      return $table;
+  }
+  
+  1;
+DUMBBACKUP_TABLE
 
 $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'METHOD_GENERATE_ACCESSOR';
   package Method::Generate::Accessor;
