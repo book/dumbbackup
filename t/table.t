@@ -5,7 +5,6 @@ use utf8;
 is(
     table_for( [qw( a bb ccc dddd )], [qw( aa b cccc dd )], ),
     <<~ 'TABLE', 'basic table'
-    ────┬────┬──────┬──────
      a  │ bb │ ccc  │ dddd 
      aa │ b  │ cccc │ dd   
     TABLE
@@ -14,12 +13,12 @@ is(
 is(
     table_for(
         [qw( a bb ccc dddd )], [qw( aaa bbb ccc ddd )],
-        [qw( aaaa bbb cc d )],
+        '---', [qw( aaaa bbb cc d )],
     ),
-    <<~ 'TABLE', 'another basic table'
-    ──────┬─────┬─────┬──────
+    <<~ 'TABLE', 'table with separator'
      a    │ bb  │ ccc │ dddd 
      aaa  │ bbb │ ccc │ ddd  
+    ──────┼─────┼─────┼──────
      aaaa │ bbb │ cc  │ d    
     TABLE
 );

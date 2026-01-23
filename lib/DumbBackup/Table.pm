@@ -29,9 +29,9 @@ sub table_for ( $header, @rows ) {
         $cell_width[-1] = $cell_width[-1] + length($header) - $table_width;
         $table_width = length $header;
     }
-    $table .= sprintf " %-${table_width}s \n", $header
+    $table .= sprintf( " %-${table_width}s \n", $header )
+      . join( '┬', map '─' x ( $_ + 2 ), @cell_width ) . "\n"
       if $header;
-    $table .= join( '┬', map '─' x ( $_ + 2 ), @cell_width ) . "\n";
     for my $row (@rows) {
         if ( ref $row ) {
             $table .= ' '
