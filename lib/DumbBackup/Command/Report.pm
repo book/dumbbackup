@@ -23,6 +23,7 @@ sub options_spec {
     qw(
       strike|strikeout|stroke|s!
       backups|b!
+      compact|c!
       keep|kept|kept|k!
       order_by|order-by|sort_by|sort-by=s
     );
@@ -51,6 +52,32 @@ sub retention_report ( $self, $store, @backups ) {
         splice @keep, $options->{$period}
           if $options->{$period} >= 0;    # -1 means keep all
         $keep{$period}{ $bucket->{$period}{$_}[-1] }++ for @keep;
+    }
+
+    # compute the compact report
+    if ( $options->{compact} ) {
+        my $keeping = 0;
+        my $report;    # YYYY-mm-dd_HH-MM-SS
+        for my $date ( sort @backups ) {
+            my $line .= sprintf( " %-19s", basename($date) ) . ' │ ' . join(
+                '',
+                map $keep{ $PERIODS[$_] }{$date}   # first letter of each bucket
+                ? uc substr( $PERIODS[$_], 0, 1 )
+                : ' ',
+                0 .. $#PERIODS
+            ) . " \n";
+            $keeping++ if $line =~ /[DWMQY]/;
+            $report .= $line;
+        }
+
+        # strike backups to be removed with COMBINING LONG STROKE OVERLAY
+        $report =~ s/^([^┼┬DWMQY]*)$/$1=~s{(.)}{$1\x{336}}gr/gem
+          if $options->{strike};
+        my $header =
+          sprintf " $store (%d backup%s, keep %s)",
+          scalar @backups, @backups > 1 ? 's' : '',
+          $keeping == @backups ? $keeping == 1 ? 'it' : 'all' : $keeping;
+        return join "\n", $header, '─' x 21 . '┬' . '─' x 7, $report;
     }
 
     # compute the format for each column of the report
@@ -206,6 +233,7 @@ Aliases: C<report>, C<summary>.
 =head3 Reporting options
 
     --strike               strike out the backups to be deleted from the report
+    --compact              show a compact version of the report
     --backups              show an extra column with the actual backup name
 
 =head2 Summary options
@@ -266,6 +294,19 @@ The backup directories are of the form C<YYYY-MM-DD_hh-mm-ss>. When the
 "backup" column is not shown (the default), the same day can show up
 multiple times in the "daily" column, if multiple backups exist for
 that day.
+
+The compact report looks like the following, with the bucket each
+backup belongs to indicated by its initial:
+
+     host (7 backups, keep 5)
+    ─────────────────────┬───────
+     2024-01-04          │ DW Q  
+     2024-10-23          │ DW QY 
+     2025-03-17          │ DWMQ  
+     2025-11-29_13-44-17 │       
+     2025-11-29_23-45-11 │ DWM   
+     2025-12-20_08-24-32 │       
+     2025-12-20_17-42-51 │ DWMQY 
 
 =head2 Summary
 
