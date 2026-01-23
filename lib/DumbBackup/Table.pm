@@ -32,15 +32,21 @@ sub table_for ( $header, @rows ) {
     $table .= sprintf( " %-${table_width}s \n", $header )
       . join( '┬', map '─' x ( $_ + 2 ), @cell_width ) . "\n"
       if $header;
+    my @fmt = map "%-${_}s", @cell_width;    # left-justify by default
     for my $row (@rows) {
         if ( ref $row ) {
             $table .= ' '
               . join( ' │ ',
-                map sprintf( "%-$cell_width[$_]s", $row->[$_] ),
-                0 .. $#$row )
+                map sprintf( $fmt[$_], $row->[$_] ), 0 .. $#$row )
               . " \n";
         }
-        else {
+        elsif ( substr( $row, 0, 1 ) eq '%' ) {    # format
+            my @justify = split //, substr $row, 1;
+            $fmt[$_] = sprintf '%%%s%ds',
+              $justify[$_] && $justify[$_] eq '>' ? '' : '-', $cell_width[$_]
+              for 0 .. $#cell_width;
+        }
+        else {                                     # separator
             $table .= join( '┼',
                 map '─' x ( $cell_width[$_] + 2 ),
                 0 .. $rows[0]->$#* )

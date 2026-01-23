@@ -56,4 +56,22 @@ is(
      TABLE
 );
 
+is(
+    table_for(
+        'wobbling justification', [qw( A B C D )],
+        '-',                      [qw( aa bb ccc dd )],
+        '%<<>>',                  [qw( a  bb c ddd )],
+        '%><><',                  [qw( a  bb c ddd )],
+    ),
+    <<~ 'TABLE', 'table with justification'
+      wobbling justification 
+     ────┬────┬─────┬────────
+      A  │ B  │ C   │ D      
+     ────┼────┼─────┼────────
+      aa │ bb │ ccc │ dd     
+      a  │ bb │   c │    ddd 
+       a │ bb │   c │ ddd    
+     TABLE
+);
+
 done_testing;
