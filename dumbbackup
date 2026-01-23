@@ -437,7 +437,7 @@ $fatpacked{"DumbBackup/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n"
   
   =head1 COPYRIGHT
   
-  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
   
   =head1 LICENSE
   
@@ -710,7 +710,7 @@ $fatpacked{"DumbBackup/Command/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
   
   =head1 COPYRIGHT
   
-  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
   
   =head1 LICENSE
   
@@ -853,7 +853,7 @@ $fatpacked{"DumbBackup/Command/Cleanup.pm"} = '#line '.(1+__LINE__).' "'.__FILE_
   
   =head1 COPYRIGHT
   
-  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
   
   =head1 LICENSE
   
@@ -918,7 +918,7 @@ $fatpacked{"DumbBackup/Command/Help.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."
   
   =head1 COPYRIGHT
   
-  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
   
   =head1 LICENSE
   
@@ -1071,8 +1071,9 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
       } @store_backups;
   
       # header
-      my @rows = ( [ qw( host first last count ) ], '---' );
+      my @rows = ( [qw( host first last count )], '---' );
       push $rows[0]->@*, 'keep' if $options->{keep};
+      push @rows, $options->{keep} ? '%><<>>' : '%><<>';
   
       # store summaries
       for my $store_backups (@store_backups) {
@@ -1228,7 +1229,7 @@ $fatpacked{"DumbBackup/Command/Report.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
   
   =head1 COPYRIGHT
   
-  Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+  Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
   
   =head1 LICENSE
   
@@ -1540,15 +1541,21 @@ $fatpacked{"DumbBackup/Table.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<
       $table .= sprintf( " %-${table_width}s \n", $header )
         . join( '┬', map '─' x ( $_ + 2 ), @cell_width ) . "\n"
         if $header;
+      my @fmt = map "%-${_}s", @cell_width;    # left-justify by default
       for my $row (@rows) {
           if ( ref $row ) {
               $table .= ' '
                 . join( ' │ ',
-                  map sprintf( "%-$cell_width[$_]s", $row->[$_] ),
-                  0 .. $#$row )
+                  map sprintf( $fmt[$_], $row->[$_] ), 0 .. $#$row )
                 . " \n";
           }
-          else {
+          elsif ( substr( $row, 0, 1 ) eq '%' ) {    # format
+              my @justify = split //, substr $row, 1;
+              $fmt[$_] = sprintf '%%%s%ds',
+                $justify[$_] && $justify[$_] eq '>' ? '' : '-', $cell_width[$_]
+                for 0 .. $#cell_width;
+          }
+          else {                                     # separator
               $table .= join( '┼',
                   map '─' x ( $cell_width[$_] + 2 ),
                   0 .. $rows[0]->$#* )

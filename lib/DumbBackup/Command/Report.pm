@@ -140,8 +140,9 @@ sub summary_report ( $self, @stores ) {
     } @store_backups;
 
     # header
-    my @rows = ( [ qw( host first last count ) ], '---' );
+    my @rows = ( [qw( host first last count )], '---' );
     push $rows[0]->@*, 'keep' if $options->{keep};
+    push @rows, $options->{keep} ? '%><<>>' : '%><<>';
 
     # store summaries
     for my $store_backups (@store_backups) {
@@ -297,7 +298,7 @@ Philippe Bruhat (BooK) <book@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright 2013-2025 Philippe Bruhat (BooK), all rights reserved.
+Copyright 2013-2026 Philippe Bruhat (BooK), all rights reserved.
 
 =head1 LICENSE
 
