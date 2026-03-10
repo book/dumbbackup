@@ -192,6 +192,7 @@ sub call ( $self ) {
     # once the backup succeeds, move it to its final destination
     if (
         $status == 0        # Success
+        || $status == 23    # Partial transfer due to error
         || $status == 24    # Partial transfer due to vanished source files
       )
     {
