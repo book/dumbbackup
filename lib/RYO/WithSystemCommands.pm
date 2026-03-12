@@ -30,10 +30,8 @@ sub run_command ( $self, @cmd ) {
           ( $? & 127 ), ( $? & 128 ) ? 'with' : 'without';
     }
     else {
-        if ( my $status = $? >> 8 ) {
-            warn "'$cmd[0]' failed with status $status\n";
-            exit $status;
-        }
+        warn "'$cmd[0]' failed with status $status\n"
+          if $status;
     }
 
     return $status;
