@@ -14,14 +14,14 @@ BEGIN {
 my %fatpacked;
 
 $fatpacked{"B/Hooks/EndOfScope.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'B_HOOKS_ENDOFSCOPE';
-  package B::Hooks::EndOfScope; # git description: 0.23-2-ga391106
+  package B::Hooks::EndOfScope; # git description: 0.25-2-g173e4cd
   # ABSTRACT: Execute code after a scope finished compilation
   # KEYWORDS: code hooks execution scope
   
   use strict;
   use warnings;
   
-  our $VERSION = '0.24';
+  our $VERSION = '0.26';
   
   use 5.006001;
   
@@ -49,7 +49,7 @@ $fatpacked{"B/Hooks/EndOfScope/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"
   use warnings;
   use strict;
   
-  our $VERSION = '0.24';
+  our $VERSION = '0.26';
   
   use constant _PERL_VERSION => "$]";
   
@@ -103,7 +103,7 @@ $fatpacked{"B/Hooks/EndOfScope/PP/FieldHash.pm"} = '#line '.(1+__LINE__).' "'.__
   use strict;
   use warnings;
   
-  our $VERSION = '0.24';
+  our $VERSION = '0.26';
   
   use Tie::Hash ();
   use Hash::Util::FieldHash 'fieldhash';
@@ -144,12 +144,12 @@ B_HOOKS_ENDOFSCOPE_PP_FIELDHASH
 $fatpacked{"Class/Method/Modifiers.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'CLASS_METHOD_MODIFIERS';
   use strict;
   use warnings;
-  package Class::Method::Modifiers; # git description: v2.12-17-gbc38636
+  package Class::Method::Modifiers; # git description: v2.13-4-g6e49964
   # ABSTRACT: Provides Moose-like method modifiers
   # KEYWORDS: method wrap modification patch
   # vim: set ts=8 sts=4 sw=4 tw=115 et :
   
-  our $VERSION = '2.13';
+  our $VERSION = '2.14';
   
   use base 'Exporter';
   
@@ -642,6 +642,7 @@ $fatpacked{"DumbBackup/Command/Backup.pm"} = '#line '.(1+__LINE__).' "'.__FILE__
       # once the backup succeeds, move it to its final destination
       if (
           $status == 0        # Success
+          || $status == 23    # Partial transfer due to error
           || $status == 24    # Partial transfer due to vanished source files
         )
       {
@@ -1570,15 +1571,22 @@ DUMBBACKUP_TABLE
 
 $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'METHOD_GENERATE_ACCESSOR';
   package Method::Generate::Accessor;
+  use strict;
+  use warnings;
   
-  use Moo::_strictures;
-  use Moo::_Utils qw(_load_module _maybe_load_module _install_coderef _module_name_rx);
+  use Moo::_Utils qw(_maybe_load_module _install_coderef _module_name_rx);
   use Moo::Object ();
   BEGIN { our @ISA = qw(Moo::Object) }
   use Sub::Quote qw(quote_sub quoted_from_sub quotify sanitize_identifier);
   use Scalar::Util 'blessed';
   use Carp qw(croak);
-  BEGIN { our @CARP_NOT = qw(Moo::_Utils) }
+  BEGIN {
+    our @CARP_NOT = qw(
+      Moo::_Utils
+      Moo::Object
+      Moo::Role
+    );
+  }
   BEGIN {
     *_CAN_WEAKEN_READONLY = (
       "$]" < 5.008_003 or $ENV{MOO_TEST_PRE_583}
@@ -1614,23 +1622,34 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
       package => 'Method::Generate::Accessor::_Generated',
       %{ $quote_opts||{} },
     };
-    $spec->{allow_overwrite}++ if $name =~ s/^\+//;
-    croak "Must have an is" unless my $is = $spec->{is};
-    if ($is eq 'ro') {
+  
+    $spec->{allow_overwrite}++
+      if $name =~ s/^\+//;
+  
+    my $is = $spec->{is};
+    if (!$is) {
+      croak "Must have an is";
+    }
+    elsif ($is eq 'ro') {
       $spec->{reader} = $name unless exists $spec->{reader};
-    } elsif ($is eq 'rw') {
+    }
+    elsif ($is eq 'rw') {
       $spec->{accessor} = $name unless exists $spec->{accessor}
         or ( $spec->{reader} and $spec->{writer} );
-    } elsif ($is eq 'lazy') {
+    }
+    elsif ($is eq 'lazy') {
       $spec->{reader} = $name unless exists $spec->{reader};
       $spec->{lazy} = 1;
       $spec->{builder} ||= '_build_'.$name unless exists $spec->{default};
-    } elsif ($is eq 'rwp') {
+    }
+    elsif ($is eq 'rwp') {
       $spec->{reader} = $name unless exists $spec->{reader};
       $spec->{writer} = "_set_${name}" unless exists $spec->{writer};
-    } elsif ($is ne 'bare') {
+    }
+    elsif ($is ne 'bare') {
       croak "Unknown is ${is}";
     }
+  
     if (exists $spec->{builder}) {
       if(ref $spec->{builder}) {
         $self->_validate_codulatable('builder', $spec->{builder},
@@ -1642,28 +1661,35 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
       croak "Invalid builder for $into->$name - not a valid method name"
         if $spec->{builder} !~ _module_name_rx;
     }
+  
     if (($spec->{predicate}||0) eq 1) {
       $spec->{predicate} = $name =~ /^_/ ? "_has${name}" : "has_${name}";
     }
+  
     if (($spec->{clearer}||0) eq 1) {
       $spec->{clearer} = $name =~ /^_/ ? "_clear${name}" : "clear_${name}";
     }
+  
     if (($spec->{trigger}||0) eq 1) {
       $spec->{trigger} = quote_sub('shift->_trigger_'.$name.'(@_)');
     }
+  
     if (($spec->{coerce}||0) eq 1) {
       my $isa = $spec->{isa};
       if (blessed $isa and $isa->can('coercion')) {
         $spec->{coerce} = $isa->coercion;
-      } elsif (blessed $isa and $isa->can('coerce')) {
+      }
+      elsif (blessed $isa and $isa->can('coerce')) {
         $spec->{coerce} = sub { $isa->coerce(@_) };
-      } else {
+      }
+      else {
         croak "Invalid coercion for $into->$name - no appropriate type constraint";
       }
     }
   
     foreach my $setting (qw( isa coerce )) {
-      next if !exists $spec->{$setting};
+      next
+        if !exists $spec->{$setting};
       $self->_validate_codulatable($setting, $spec->{$setting}, "$into->$name");
     }
   
@@ -1692,7 +1718,8 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
         $methods{$reader} = $self->_generate_xs(
           getters => $into, $reader, $name, $spec
         );
-      } else {
+      }
+      else {
         $self->{captures} = {};
         $methods{$reader} =
           quote_sub "${into}::${reader}"
@@ -1703,6 +1730,7 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           ;
       }
     }
+  
     if (my $accessor = $spec->{accessor}) {
       _die_overwrite($into, $accessor, 'an accessor')
         if !$spec->{allow_overwrite} && defined &{"${into}::${accessor}"};
@@ -1714,7 +1742,8 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
         $methods{$accessor} = $self->_generate_xs(
           accessors => $into, $accessor, $name, $spec
         );
-      } else {
+      }
+      else {
         $self->{captures} = {};
         $methods{$accessor} =
           quote_sub "${into}::${accessor}"
@@ -1724,6 +1753,7 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           ;
       }
     }
+  
     if (my $writer = $spec->{writer}) {
       _die_overwrite($into, $writer, 'a writer')
         if !$spec->{allow_overwrite} && defined &{"${into}::${writer}"};
@@ -1734,7 +1764,8 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
         $methods{$writer} = $self->_generate_xs(
           setters => $into, $writer, $name, $spec
         );
-      } else {
+      }
+      else {
         $self->{captures} = {};
         $methods{$writer} =
           quote_sub "${into}::${writer}"
@@ -1751,7 +1782,8 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
         $methods{$pred} = $self->_generate_xs(
           exists_predicates => $into, $pred, $name, $spec
         );
-      } else {
+      }
+      else {
         $self->{captures} = {};
         $methods{$pred} =
           quote_sub "${into}::${pred}"
@@ -1761,9 +1793,11 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           ;
       }
     }
+  
     if (my $builder = delete $spec->{builder_sub}) {
       _install_coderef( "${into}::$spec->{builder}" => $builder );
     }
+  
     if (my $cl = $spec->{clearer}) {
       _die_overwrite($into, $cl, 'a clearer')
         if !$spec->{allow_overwrite} && defined &{"${into}::${cl}"};
@@ -1775,22 +1809,23 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           => $quote_opts
         ;
     }
+  
     if (my $hspec = $spec->{handles}) {
       my $asserter = $spec->{asserter} ||= '_assert_'.$name;
-      my @specs = do {
-        if (ref($hspec) eq 'ARRAY') {
-          map [ $_ => $_ ], @$hspec;
-        } elsif (ref($hspec) eq 'HASH') {
+      my @specs =
+        ref $hspec eq 'ARRAY' ? (
+          map [ $_ => $_ ], @$hspec
+        )
+        : ref $hspec eq 'HASH' ? (
           map [ $_ => ref($hspec->{$_}) ? @{$hspec->{$_}} : $hspec->{$_} ],
-            keys %$hspec;
-        } elsif (!ref($hspec)) {
+            keys %$hspec
+        )
+        : !ref $hspec ? do {
           require Moo::Role;
-          _load_module $hspec;
           map [ $_ => $_ ], Moo::Role->methods_provided_by($hspec)
-        } else {
-          croak "You gave me a handles of ${hspec} and I have no idea why";
         }
-      };
+        : croak "You gave me a handles of ${hspec} and I have no idea why";
+  
       foreach my $delegation_spec (@specs) {
         my ($proxy, $target, @args) = @$delegation_spec;
         _die_overwrite($into, $proxy, 'a delegation')
@@ -1804,6 +1839,7 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           ;
       }
     }
+  
     if (my $asserter = $spec->{asserter}) {
       _die_overwrite($into, $asserter, 'an asserter')
         if !$spec->{allow_overwrite} && defined &{"${into}::${asserter}"};
@@ -1815,6 +1851,7 @@ $fatpacked{"Method/Generate/Accessor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
           => $quote_opts
         ;
     }
+  
     \%methods;
   }
   
@@ -2270,13 +2307,13 @@ METHOD_GENERATE_ACCESSOR
 
 $fatpacked{"Method/Generate/BuildAll.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'METHOD_GENERATE_BUILDALL';
   package Method::Generate::BuildAll;
+  use strict;
+  use warnings;
   
-  use Moo::_strictures;
   use Moo::Object ();
   BEGIN { our @ISA = qw(Moo::Object) }
   use Sub::Quote qw(quote_sub quotify);
-  use Moo::_Utils qw(_getglob);
-  use Moo::_mro;
+  use Moo::_Utils qw(_getglob _linear_isa);
   
   sub generate_method {
     my ($self, $into) = @_;
@@ -2304,7 +2341,7 @@ $fatpacked{"Method/Generate/BuildAll.pm"} = '#line '.(1+__LINE__).' "'.__FILE__.
     my @builds =
       grep *{_getglob($_)}{CODE},
       map "${_}::BUILD",
-      reverse @{mro::get_linear_isa($into)};
+      reverse @{_linear_isa($into)};
     '    (('.$args.')[0]->{__no_BUILD__} or ('."\n"
     .join('', map qq{      ${me}->${_}(${args}),\n}, @builds)
     ."    )),\n";
@@ -2315,12 +2352,12 @@ METHOD_GENERATE_BUILDALL
 
 $fatpacked{"Method/Generate/Constructor.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'METHOD_GENERATE_CONSTRUCTOR';
   package Method::Generate::Constructor;
+  use strict;
+  use warnings;
   
-  use Moo::_strictures;
   use Sub::Quote qw(quote_sub quotify);
   use Sub::Defer;
-  use Moo::_Utils qw(_getstash _getglob);
-  use Moo::_mro;
+  use Moo::_Utils qw(_getstash _getglob _linear_isa);
   use Scalar::Util qw(weaken);
   use Carp qw(croak);
   use Carp::Heavy ();
@@ -2338,8 +2375,8 @@ $fatpacked{"Method/Generate/Constructor.pm"} = '#line '.(1+__LINE__).' "'.__FILE
     my $ag = $self->accessor_generator;
     while (my ($name, $new_spec) = splice @new_specs, 0, 2) {
       if ($name =~ s/^\+//) {
-        croak "has '+${name}' given but no ${name} attribute already exists"
-          unless my $old_spec = $specs->{$name};
+        my $old_spec = $specs->{$name}
+          or croak "has '+${name}' given but no ${name} attribute already exists";
         $ag->merge_specs($new_spec, $old_spec);
       }
       if ($new_spec->{required}
@@ -2391,11 +2428,11 @@ $fatpacked{"Method/Generate/Constructor.pm"} = '#line '.(1+__LINE__).' "'.__FILE
     my ($self) = @_;
     $self->assert_constructor;
     my $package = $self->{package};
-    my (undef, @isa) = @{mro::get_linear_isa($package)};
+    my (undef, @isa) = @{_linear_isa($package)};
     my $isa = join ',', @isa;
     my (undef, $from_file, $from_line) = caller(Carp::short_error_loc());
     my $constructor = defer_sub "${package}::new" => sub {
-      my (undef, @new_isa) = @{mro::get_linear_isa($package)};
+      my (undef, @new_isa) = @{_linear_isa($package)};
       if (join(',', @new_isa) ne $isa) {
         my ($expected_new) = grep { *{_getglob($_.'::new')}{CODE} } @isa;
         my ($found_new) = grep { *{_getglob($_.'::new')}{CODE} } @new_isa;
@@ -3496,9 +3533,10 @@ MODULE_RUNTIME
 
 $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
   package Moo;
+  use strict;
+  use warnings;
+  no warnings 'once';
   
-  use Moo::_strictures;
-  use Moo::_mro;
   use Moo::_Utils qw(
     _check_tracked
     _getglob
@@ -3506,6 +3544,7 @@ $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
     _install_coderef
     _install_modifier
     _install_tracked
+    _linear_isa
     _load_module
     _set_loaded
     _unimport_coderefs
@@ -3521,7 +3560,7 @@ $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
     );
   }
   
-  our $VERSION = '2.004004';
+  our $VERSION = '2.005005';
   $VERSION =~ tr/_//d;
   
   require Moo::sification;
@@ -3645,8 +3684,7 @@ $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
         croak "Can't extend role '$superclass'";
       }
     }
-    # Can't do *{...} = \@_ or 5.10.0's mro.pm stops seeing @ISA
-    @{*{_getglob("${target}::ISA")}{ARRAY}} = @_;
+    @{*{_getglob("${target}::ISA")}} = @_;
     if (my $old = delete $Moo::MAKERS{$target}{constructor}) {
       $old->assert_constructor;
       delete _getstash($target)->{new};
@@ -3675,7 +3713,7 @@ $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
       my $maker_class = do {
         no strict 'refs';
         if (my $m = do {
-          my @isa = @{mro::get_linear_isa($target)};
+          my @isa = @{_linear_isa($target)};
           shift @isa;
           if (my ($parent_new) = grep +(defined &{$_.'::new'}), @isa) {
             $MAKERS{$parent_new} && $MAKERS{$parent_new}{accessor};
@@ -3721,7 +3759,7 @@ $fatpacked{"Moo.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO';
       );
   
       my $con;
-      my @isa = @{mro::get_linear_isa($target)};
+      my @isa = @{_linear_isa($target)};
       shift @isa;
       no strict 'refs';
       if (my ($parent_new) = grep +(defined &{$_.'::new'}), @isa) {
@@ -3792,7 +3830,8 @@ MOO
 
 $fatpacked{"Moo/HandleMoose/_TypeMap.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_HANDLEMOOSE__TYPEMAP';
   package Moo::HandleMoose::_TypeMap;
-  use Moo::_strictures;
+  use strict;
+  use warnings;
   
   package
     Moo::HandleMoose;
@@ -3884,8 +3923,9 @@ MOO_HANDLEMOOSE__TYPEMAP
 
 $fatpacked{"Moo/Object.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_OBJECT';
   package Moo::Object;
+  use strict;
+  use warnings;
   
-  use Moo::_strictures;
   use Carp ();
   
   our %NO_BUILD;
@@ -3964,8 +4004,9 @@ MOO_OBJECT
 
 $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_ROLE';
   package Moo::Role;
+  use strict;
+  use warnings;
   
-  use Moo::_strictures;
   use Moo::_Utils qw(
     _check_tracked
     _getglob
@@ -3987,10 +4028,11 @@ $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_RO
       Method::Generate::Constructor
       Moo::sification
       Moo::_Utils
+      Role::Tiny
     );
   }
   
-  our $VERSION = '2.004004';
+  our $VERSION = '2.005005';
   $VERSION =~ tr/_//d;
   
   require Moo::sification;
@@ -4033,6 +4075,10 @@ $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_RO
       for sort keys %install;
     *{_getglob("${target}::meta")} = $me->can('meta');
     return;
+  }
+  
+  sub _require_module {
+    _load_module($_[1]);
   }
   
   sub _gen_subs {
@@ -4111,14 +4157,6 @@ $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_RO
       for _check_tracked($role, [ keys %$all_subs ]);
   
     return $non_methods;
-  }
-  
-  sub methods_provided_by {
-    my ($self, $role) = @_;
-    _load_module($role);
-    $self->_inhale_if_moose($role);
-    croak "${role} is not a Moo::Role" unless $self->is_role($role);
-    return $self->SUPER::methods_provided_by($role);
   }
   
   sub is_role {
@@ -4262,58 +4300,80 @@ $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_RO
       $_[0]->SUPER::role_application_steps;
   }
   
-  sub apply_roles_to_package {
-    my ($me, $to, @roles) = @_;
-    foreach my $role (@roles) {
-      _load_module($role);
-      $me->_inhale_if_moose($role);
-      croak "${role} is not a Moo::Role" unless $me->is_role($role);
-    }
-    $me->SUPER::apply_roles_to_package($to, @roles);
-  }
-  
-  sub apply_single_role_to_package {
-    my ($me, $to, $role) = @_;
-    _load_module($role);
-    $me->_inhale_if_moose($role);
-    croak "${role} is not a Moo::Role" unless $me->is_role($role);
-    $me->SUPER::apply_single_role_to_package($to, $role);
-  }
-  
-  sub create_class_with_roles {
-    my ($me, $superclass, @roles) = @_;
-  
-    my ($new_name, $compose_name) = $me->_composite_name($superclass, @roles);
-  
-    return $new_name if $COMPOSED{class}{$new_name};
-  
-    foreach my $role (@roles) {
-      _load_module($role);
-      $me->_inhale_if_moose($role);
-      croak "${role} is not a Moo::Role" unless $me->is_role($role);
-    }
-  
-    my $m;
-    if ($INC{"Moo.pm"}
-        and $m = Moo->_accessor_maker_for($superclass)
-        and ref($m) ne 'Method::Generate::Accessor') {
-      # old fashioned way time.
-      @{*{_getglob("${new_name}::ISA")}{ARRAY}} = ($superclass);
-      $Moo::MAKERS{$new_name} = {is_class => 1};
-      $me->apply_roles_to_package($new_name, @roles);
-    }
-    else {
-      $me->SUPER::create_class_with_roles($superclass, @roles);
-      $Moo::MAKERS{$new_name} = {is_class => 1};
-      $me->_handle_constructor($new_name, $_) for @roles;
-    }
+  sub _build_class_with_roles {
+    my ($me, $new_name, $superclass, @roles) = @_;
+    $Moo::MAKERS{$new_name} = {is_class => 1};
+    $me->SUPER::_build_class_with_roles($new_name, $superclass, @roles);
   
     if ($INC{'Moo/HandleMoose.pm'} && !$Moo::sification::disabled) {
       Moo::HandleMoose::inject_fake_metaclass_for($new_name);
     }
-    $COMPOSED{class}{$new_name} = 1;
-    _set_loaded($new_name, (caller)[1]);
+  
+    my $lvl = 0;
+    my $file;
+    while ((my $pack, $file) = caller($lvl++)) {
+      if ($pack ne __PACKAGE__ && $pack ne 'Role::Tiny' && !$pack->isa($me)) {
+        last;
+      }
+    }
+    _set_loaded($new_name, $file || (caller)[1]);
+  
     return $new_name;
+  }
+  
+  sub _gen_apply_defaults_for {
+    my ($me, $class, @roles) = @_;
+  
+    my @attrs = map @{$INFO{$_}{attributes}||[]}, @roles;
+  
+    my $con_gen;
+    my $m;
+  
+    return undef
+      unless $INC{'Moo.pm'}
+      and @attrs
+      and $con_gen = Moo->_constructor_maker_for($class)
+      and $m = Moo->_accessor_maker_for($class);
+  
+    my $specs = $con_gen->all_attribute_specs;
+  
+    my %seen;
+    my %captures;
+    my @set;
+    while (my ($name, $spec) = splice @attrs, 0, 2) {
+      next
+        if $seen{$name}++;
+  
+      next
+        unless $m->has_eager_default($name, $spec);
+  
+      my ($has, $has_cap)
+        = $m->generate_simple_has('$_[0]', $name, $spec);
+      my ($set, $pop_cap)
+        = $m->generate_use_default('$_[0]', $name, $spec, $has);
+  
+      @captures{keys %$has_cap, keys %$pop_cap}
+        = (values %$has_cap, values %$pop_cap);
+  
+      push @set, $set;
+    }
+  
+    return undef
+      if !@set;
+  
+    my $code = join '', map "($_),", @set;
+    no warnings 'void';
+    require Sub::Quote;
+    return Sub::Quote::quote_sub(
+      "${class}::_apply_defaults",
+      $code,
+      \%captures,
+      {
+        package => $class,
+        no_install => 1,
+        no_defer => 1,
+      }
+    );
   }
   
   sub apply_roles_to_object {
@@ -4322,67 +4382,15 @@ $fatpacked{"Moo/Role.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_RO
     my $class = ref $new;
     _set_loaded($class, (caller)[1]);
   
-    my $apply_defaults = $APPLY_DEFAULTS{$class};
-    if (!defined $apply_defaults) {
-      my $attrs = { map @{$INFO{$_}{attributes}||[]}, @roles };
-  
-      if ($INC{'Moo.pm'}
-          and keys %$attrs
-          and my $con_gen = Moo->_constructor_maker_for($class)
-          and my $m = Moo->_accessor_maker_for($class)) {
-  
-        my $specs = $con_gen->all_attribute_specs;
-  
-        my %captures;
-        my $code = join('',
-          ( map {
-            my $name = $_;
-            my $spec = $specs->{$name};
-            if ($m->has_eager_default($name, $spec)) {
-              my ($has, $has_cap)
-                = $m->generate_simple_has('$_[0]', $name, $spec);
-              my ($set, $pop_cap)
-                = $m->generate_use_default('$_[0]', $name, $spec, $has);
-  
-              @captures{keys %$has_cap, keys %$pop_cap}
-                = (values %$has_cap, values %$pop_cap);
-              "($set),";
-            }
-            else {
-              ();
-            }
-          } sort keys %$attrs ),
-        );
-        if ($code) {
-          require Sub::Quote;
-          $apply_defaults = Sub::Quote::quote_sub(
-            "${class}::_apply_defaults",
-            "no warnings 'void';\n$code",
-            \%captures,
-            {
-              package => $class,
-              no_install => 1,
-            }
-          );
-        }
-      }
-      $APPLY_DEFAULTS{$class} = $apply_defaults ||= 0;
+    if (!exists $APPLY_DEFAULTS{$class}) {
+      $APPLY_DEFAULTS{$class} = $me->_gen_apply_defaults_for($class, @roles);
     }
-  
-    if ($apply_defaults) {
+    if (my $apply_defaults = $APPLY_DEFAULTS{$class}) {
       local $Carp::Internal{+__PACKAGE__} = 1;
       local $Carp::Internal{$class} = 1;
       $new->$apply_defaults;
     }
     return $new;
-  }
-  
-  sub _composable_package_for {
-    my ($self, $role) = @_;
-    my $composed_name = 'Role::Tiny::_COMPOSABLE::'.$role;
-    return $composed_name if $COMPOSED{role}{$composed_name};
-    $self->_make_accessors_if_moose($composed_name, $role);
-    $self->SUPER::_composable_package_for($role);
   }
   
   sub _install_single_modifier {
@@ -4443,10 +4451,12 @@ MOO_ROLE
 
 $fatpacked{"Moo/_Utils.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO__UTILS';
   package Moo::_Utils;
-  use Moo::_strictures;
+  use strict;
+  use warnings;
   
   {
     no strict 'refs';
+    no warnings 'once';
     sub _getglob { \*{$_[0]} }
     sub _getstash { \%{"$_[0]::"} }
   }
@@ -4472,8 +4482,9 @@ $fatpacked{"Moo/_Utils.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_
     *_module_name_rx = sub(){$module_name_rx};
   }
   
-  use Exporter qw(import);
-  use Config;
+  use Exporter ();
+  BEGIN { *import = \&Exporter::import }
+  use Config ();
   use Scalar::Util qw(weaken);
   use Carp qw(croak);
   
@@ -4496,6 +4507,9 @@ $fatpacked{"Moo/_Utils.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_
     _name_coderef
     _set_loaded
     _unimport_coderefs
+    _linear_isa
+    _in_global_destruction
+    _in_global_destruction_code
   );
   
   my %EXPORTS;
@@ -4602,6 +4616,60 @@ $fatpacked{"Moo/_Utils.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_
     return $MAYBE_LOADED{$module} = 0;
   }
   
+  BEGIN {
+    # optimize for newer perls
+    require mro
+      if "$]" >= 5.009_005;
+  
+    if (defined &mro::get_linear_isa) {
+      *_linear_isa = \&mro::get_linear_isa;
+    }
+    else {
+      my $e;
+      {
+        local $@;
+        eval <<'END_CODE' or $e = $@;
+  sub _linear_isa($;$) {
+    my $class = shift;
+    my $type = shift || exists $Class::C3::MRO{$class} ? 'c3' : 'dfs';
+  
+    if ($type eq 'c3') {
+      require Class::C3;
+      return [Class::C3::calculateMRO($class)];
+    }
+  
+    my @check = ($class);
+    my @lin;
+  
+    my %found;
+    while (defined(my $check = shift @check)) {
+      push @lin, $check;
+      no strict 'refs';
+      unshift @check, grep !$found{$_}++, @{"$check\::ISA"};
+    }
+  
+    return \@lin;
+  }
+  
+  1;
+  END_CODE
+      }
+      die $e if defined $e;
+    }
+  }
+  
+  BEGIN {
+    my $gd_code
+      = "$]" >= 5.014
+        ? q[${^GLOBAL_PHASE} eq 'DESTRUCT']
+      : _maybe_load_module('Devel::GlobalDestruction::XS')
+        ? 'Devel::GlobalDestruction::XS::in_global_destruction()'
+        : 'do { use B (); ${B::main_cv()} == 0 }';
+    *_in_global_destruction_code = sub () { $gd_code };
+    eval "sub _in_global_destruction () { $gd_code }; 1"
+      or die $@;
+  }
+  
   sub _set_loaded {
     (my $file = "$_[0].pm") =~ s{::}{/}g;
     $INC{$file} ||= $_[1];
@@ -4665,60 +4733,22 @@ $fatpacked{"Moo/_Utils.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_
     }
   }
   
-  if ($Config{useithreads}) {
+  if ($Config::Config{useithreads}) {
     require Moo::HandleMoose::_TypeMap;
   }
   
   1;
 MOO__UTILS
 
-$fatpacked{"Moo/_mro.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO__MRO';
-  package Moo::_mro;
-  use Moo::_strictures;
-  
-  if ("$]" >= 5.010_000) {
-    require mro;
-  } else {
-    require MRO::Compat;
-  }
-  
-  1;
-MOO__MRO
-
-$fatpacked{"Moo/_strictures.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO__STRICTURES';
-  package Moo::_strictures;
-  use strict;
-  use warnings;
-  
-  sub import {
-    if ($ENV{MOO_FATAL_WARNINGS}) {
-      require strictures;
-      strictures->VERSION(2);
-      @_ = ('strictures');
-      goto &strictures::import;
-    }
-    else {
-      strict->import;
-      warnings->import;
-      warnings->unimport('once');
-    }
-  }
-  
-  1;
-MOO__STRICTURES
-
 $fatpacked{"Moo/sification.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'MOO_SIFICATION';
   package Moo::sification;
-  
-  use Moo::_strictures;
+  use strict;
+  use warnings;
   no warnings 'once';
-  BEGIN {
-    *_USE_DGD = "$]" < 5.014 ? sub(){1} : sub(){0};
-    require Devel::GlobalDestruction
-      if _USE_DGD();
-  }
+  
   use Carp qw(croak);
   BEGIN { our @CARP_NOT = qw(Moo::HandleMoose) }
+  use Moo::_Utils qw(_in_global_destruction);
   
   sub unimport {
     croak "Can't disable Moo::sification after inflation has been done"
@@ -4727,11 +4757,7 @@ $fatpacked{"Moo/sification.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
   }
   
   sub Moo::HandleMoose::AuthorityHack::DESTROY {
-    unless (our $disabled or
-      _USE_DGD
-        ? Devel::GlobalDestruction::in_global_destruction()
-        : ${^GLOBAL_PHASE} eq 'DESTRUCT'
-    ) {
+    unless (our $disabled or _in_global_destruction) {
       require Moo::HandleMoose;
       Moo::HandleMoose->import;
     }
@@ -4753,13 +4779,13 @@ $fatpacked{"Moo/sification.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'
 MOO_SIFICATION
 
 $fatpacked{"Package/Stash.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'PACKAGE_STASH';
-  package Package::Stash; # git description: v0.38-23-gce01289
+  package Package::Stash; # git description: v0.39-2-ga9a8cce
   use strict;
   use warnings;
   use 5.008001;
   # ABSTRACT: Routines for manipulating stashes
   
-  our $VERSION = '0.39';
+  our $VERSION = '0.40';
   our $IMPLEMENTATION;
   
   use Module::Implementation 0.06;
@@ -4795,7 +4821,7 @@ $fatpacked{"Package/Stash/PP.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<
   use warnings;
   # ABSTRACT: Pure perl implementation of the Package::Stash API
   
-  our $VERSION = '0.39';
+  our $VERSION = '0.40';
   
   use B;
   use Carp qw(confess);
@@ -5329,15 +5355,16 @@ $fatpacked{"RYO/Command.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'RYO
   
   sub help ( $self ) { $self->usage }
   
-  sub run ( $self ) {
+  sub run ($self) {
       my $options = $self->options;
+      my $status  = 0;
       if ( $options->{help} ) { $self->help }
       else {
           $self->validate_options;
-          eval { $self->call; 1 }
-            or do { warn $@; return 1; }
+          eval { $status = $self->call; 1 }
+            or do { warn $@; $status = 255; }
       }
-      return 0;
+      return $status;
   }
   
   1;
@@ -5446,10 +5473,8 @@ $fatpacked{"RYO/WithSystemCommands.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\
             ( $? & 127 ), ( $? & 128 ) ? 'with' : 'without';
       }
       else {
-          if ( my $status = $? >> 8 ) {
-              warn "'$cmd[0]' failed with status $status\n";
-              exit $status;
-          }
+          warn "'$cmd[0]' failed with status $status\n"
+            if $status;
       }
   
       return $status;
@@ -6168,12 +6193,14 @@ $fatpacked{"Sub/Defer.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_D
   package Sub::Defer;
   use strict;
   use warnings;
-  use Exporter qw(import);
+  
+  our $VERSION = '2.006008';
+  $VERSION =~ tr/_//d;
+  
+  use Exporter ();
+  BEGIN { *import = \&Exporter::import }
   use Scalar::Util qw(weaken);
   use Carp qw(croak);
-  
-  our $VERSION = '2.006006';
-  $VERSION = eval $VERSION;
   
   our @EXPORT = qw(defer_sub undefer_sub undefer_all);
   our @EXPORT_OK = qw(undefer_package defer_info);
@@ -6480,17 +6507,22 @@ $fatpacked{"Sub/Quote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_Q
   use strict;
   use warnings;
   
+  our $VERSION = '2.006008';
+  $VERSION =~ tr/_//d;
+  
   use Sub::Defer qw(defer_sub);
   use Scalar::Util qw(weaken);
-  use Exporter qw(import);
+  use Exporter ();
+  BEGIN { *import = \&Exporter::import }
   use Carp qw(croak);
   BEGIN { our @CARP_NOT = qw(Sub::Defer) }
-  use B ();
   BEGIN {
-    *_HAVE_IS_UTF8 = defined &utf8::is_utf8 ? sub(){1} : sub(){0};
-    *_HAVE_PERLSTRING = defined &B::perlstring ? sub(){1} : sub(){0};
-    *_BAD_BACKSLASH_ESCAPE = _HAVE_PERLSTRING() && "$]" == 5.010_000 ? sub(){1} : sub(){0};
-    *_HAVE_HEX_FLOAT = !$ENV{SUB_QUOTE_NO_HEX_FLOAT} && "$]" >= 5.022 ? sub(){1} : sub(){0};
+    my $TRUE  = sub(){!!1};
+    my $FALSE = sub(){!!0};
+    *_HAVE_IS_UTF8          = defined &utf8::is_utf8 ? $TRUE : $FALSE;
+    *_CAN_TRACK_BOOLEANS    = defined &builtin::is_bool ? $TRUE : $FALSE;
+    *_CAN_TRACK_NUMBERS     = defined &builtin::created_as_number ? $TRUE : $FALSE;
+    *_HAVE_HEX_FLOAT        = !$ENV{SUB_QUOTE_NO_HEX_FLOAT} && "$]" >= 5.022 ? $TRUE : $FALSE;
   
     # This may not be perfect, as we can't tell the format purely from the size
     # but it should cover the common cases, and other formats are more likely to
@@ -6507,42 +6539,78 @@ $fatpacked{"Sub/Quote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_Q
       ;
     my $precision = int( log(2)/log(10)*$nvmantbits );
   
-    *_NVSIZE = sub(){$nvsize};
-    *_NVMANTBITS = sub(){$nvmantbits};
-    *_FLOAT_PRECISION = sub(){$precision};
-  }
+    *_NVSIZE          = sub(){ $nvsize };
+    *_NVMANTBITS      = sub(){ $nvmantbits };
+    *_FLOAT_PRECISION = sub(){ $precision };
   
-  our $VERSION = '2.006006';
-  $VERSION =~ tr/_//d;
+    local $@;
+    # if B is already loaded, just use its perlstring
+    if ("$]" >= 5.008_000 && "$]" != 5.010_000 && defined &B::perlstring) {
+      *_perlstring = \&B::perlstring;
+    }
+    # XString is smaller than B, so prefer to use it. Buggy until 0.003.
+    elsif (eval { require XString; XString->VERSION(0.003) }) {
+      *_perlstring = \&XString::perlstring;
+    }
+    # B::perlstring in perl 5.10 handles escaping incorrectly on utf8 strings
+    elsif ("$]" == 5.010_000) {
+      my %escape = (
+        (map +(chr($_) => sprintf '\x%02x', $_), 0 .. 0x31, 0x7f),
+        "\t" => "\\t",
+        "\n" => "\\n",
+        "\r" => "\\r",
+        "\f" => "\\f",
+        "\b" => "\\b",
+        "\a" => "\\a",
+        "\e" => "\\e",
+        (map +($_ => "\\$_"), qw(" \ $ @)),
+      );
+      *_perlstring = sub {
+        my $value = shift;
+        $value =~ s{(["\$\@\\[:cntrl:]]|[^\x00-\x7f])}{
+          $escape{$1} || sprintf('\x{%x}', ord($1))
+        }ge;
+        qq["$value"];
+      };
+    }
+    elsif ("$]" >= 5.008_000 && eval { require B; 1 } && defined &B::perlstring ) {
+      *_perlstring = \&B::perlstring;
+    }
+    # on perl 5.6, perlstring is not available. quotemeta will mostly serve as a
+    # replacement. it quotes just by adding lots of backslashes though. if a
+    # utf8 string was written out directly as bytes, it wouldn't get interpreted
+    # correctly if not under 'use utf8'. this is mostly a theoretical concern,
+    # but enough to stick with perlstring when possible.
+    else {
+      *_perlstring = sub { qq["\Q$_[0]\E"] };
+    }
+  }
   
   our @EXPORT = qw(quote_sub unquote_sub quoted_from_sub qsub);
   our @EXPORT_OK = qw(quotify capture_unroll inlinify sanitize_identifier);
   
   our %QUOTED;
   
-  my %escape;
-  if (_BAD_BACKSLASH_ESCAPE) {
-    %escape = (
-      (map +(chr($_) => sprintf '\x%02x', $_), 0 .. 0x31, 0x7f),
-      "\t" => "\\t",
-      "\n" => "\\n",
-      "\r" => "\\r",
-      "\f" => "\\f",
-      "\b" => "\\b",
-      "\a" => "\\a",
-      "\e" => "\\e",
-      (map +($_ => "\\$_"), qw(" \ $ @)),
-    );
-  }
-  
   sub quotify {
     my $value = $_[0];
     no warnings 'numeric';
+    BEGIN {
+      warnings->unimport(qw(experimental::builtin))
+        if _CAN_TRACK_BOOLEANS || _CAN_TRACK_NUMBERS;
+    }
     ! defined $value     ? 'undef()'
+    : _CAN_TRACK_BOOLEANS && builtin::is_bool($value) ? (
+      $value ? '(!!1)' : '(!!0)'
+    )
     # numeric detection
-    : (!(_HAVE_IS_UTF8 && utf8::is_utf8($value))
-      && length( (my $dummy = '') & $value )
-      && 0 + $value eq $value
+    : (
+      _CAN_TRACK_NUMBERS
+        ? builtin::created_as_number($value)
+        : (
+          !(_HAVE_IS_UTF8 && utf8::is_utf8($value))
+          && length( (my $dummy = '') & $value )
+          && 0 + $value eq $value
+        )
     ) ? (
       $value != $value ? (
         $value eq (9**9**9*0)
@@ -6565,7 +6633,7 @@ $fatpacked{"Sub/Quote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_Q
         FACTOR: for my $ex (0 .. abs($max_factor)) {
           my $num = $value / 2**($ex_sign * $ex);
           for my $precision (_FLOAT_PRECISION .. _FLOAT_PRECISION+2) {
-            my $formatted = sprintf '%.'.$precision.'g', $num;
+            my $formatted = sprintf '%0.'.$precision.'g', $num;
             $float = $formatted
               if $ex == 0;
             if ($formatted == $num) {
@@ -6590,15 +6658,8 @@ $fatpacked{"Sub/Quote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_Q
         "$float";
       }
     )
-    : !length($value) && length( (my $dummy2 = '') & $value ) ? '(!1)' # false
-    : _BAD_BACKSLASH_ESCAPE && _HAVE_IS_UTF8 && utf8::is_utf8($value) ? do {
-      $value =~ s/(["\$\@\\[:cntrl:]]|[^\x00-\x7f])/
-        $escape{$1} || sprintf('\x{%x}', ord($1))
-      /ge;
-      qq["$value"];
-    }
-    : _HAVE_PERLSTRING ? B::perlstring($value)
-    : qq["\Q$value\E"];
+    : !_CAN_TRACK_BOOLEANS && !length($value) && length( (my $dummy2 = '') & $value ) ? '(!!0)' # false
+    : _perlstring($value);
   }
   
   sub sanitize_identifier {
@@ -6857,11 +6918,11 @@ $fatpacked{"Sub/Quote.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'SUB_Q
 SUB_QUOTE
 
 $fatpacked{"Try/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'TRY_TINY';
-  package Try::Tiny; # git description: v0.29-2-g3b23a06
+  package Try::Tiny; # git description: v0.30-11-g1b81d0a
   use 5.006;
   # ABSTRACT: Minimal try/catch with proper preservation of $@
   
-  our $VERSION = '0.30';
+  our $VERSION = '0.31';
   
   use strict;
   use warnings;
@@ -6937,7 +6998,7 @@ $fatpacked{"Try/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'TRY_TI
     # file scope + local but that causes issues with perls < 5.20 due to
     # perl rt#119311
     local $_finally_guards{guards} = [
-      map { Try::Tiny::ScopeGuard->_new($_) }
+      map Try::Tiny::ScopeGuard->_new($_),
       @finally
     ];
   
@@ -7053,6 +7114,39 @@ $fatpacked{"Try/Tiny.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'TRY_TI
   __PACKAGE__
   
 TRY_TINY
+
+$fatpacked{"XString.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'XSTRING';
+  package XString;
+  
+  use strict;
+  use warnings;
+  
+  # ABSTRACT: Isolated String helpers from B
+  
+  BEGIN {
+  
+      our $VERSION = '0.005'; # VERSION: generated by DZP::OurPkgVersion
+      require XSLoader;
+      XSLoader::load(__PACKAGE__);
+  }
+  
+  
+  1;
+  
+XSTRING
+
+$fatpacked{"builtin.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'BUILTIN';
+  package builtin 0.006;
+  
+  use strict;
+  use warnings;
+  
+  # All code, including &import, is implemented by always-present functions in
+  # the perl interpreter itself.
+  # See also `builtin.c` in perl source
+  
+  1;
+BUILTIN
 
 $fatpacked{"namespace/clean.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'NAMESPACE_CLEAN';
   package namespace::clean;
