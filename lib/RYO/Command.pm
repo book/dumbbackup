@@ -126,15 +126,16 @@ sub usage_error ( $self, $message = '' ) {
 
 sub help ( $self ) { $self->usage }
 
-sub run ( $self ) {
+sub run ($self) {
     my $options = $self->options;
+    my $status  = 0;
     if ( $options->{help} ) { $self->help }
     else {
         $self->validate_options;
-        eval { $self->call; 1 }
-          or do { warn $@; return 1; }
+        eval { $status = $self->call; 1 }
+          or do { warn $@; $status = 255; }
     }
-    return 0;
+    return $status;
 }
 
 1;
